@@ -35,21 +35,10 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
             <div className="p-3 space-y-4 font-sans">
                 {/* Brush Layer Toggles */}
                 {selectedTool === 'brush' && (
-                    <div>
-                        <div className="text-xs font-medium text-zinc-500 mb-2 uppercase tracking-wider font-fantasy">Brush Layer</div>
-                        <div className="flex bg-zinc-950 rounded p-1 border border-zinc-800">
-                            <button className="flex-1 py-1 text-xs rounded bg-gold-600 text-white shadow font-medium flex items-center justify-center space-x-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                                </svg>
-                                <span>BG</span>
-                            </button>
-                            <button className="flex-1 py-1 text-xs rounded text-zinc-500 hover:text-zinc-300 flex items-center justify-center space-x-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                                <span>FG</span>
-                            </button>
+                    <div className="space-y-3">
+                        <div>
+                            <div className="text-xs font-medium text-zinc-500 mb-2 uppercase tracking-wider font-fantasy">Brush Settings</div>
+                            {/* Procedural options removed */}
                         </div>
                     </div>
                 )}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import MapCanvas from './components/MapCanvas';
 import Toolbar from './components/Toolbar';
 import RightPanel from './components/RightPanel';
@@ -12,24 +12,13 @@ function App() {
   const [terrainData, setTerrainData] = useState<string | null>(null);
   const [items, setItems] = useState<MapItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const [canvasSize] = useState({ width: 1024, height: 768 });
 
   // New State for Reference Style UI
   const [brushSize, setBrushSize] = useState(100);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
-  // Calculate canvas size based on available space (approximate)
-  useEffect(() => {
-    const handleResize = () => {
-      setCanvasSize({
-        width: window.innerWidth,
-        height: window.innerHeight - 40 // TopBar height
-      });
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Removed auto-resize logic to keep fixed default size
 
   const handleUpdateTerrain = (data: string) => {
     setTerrainData(data);

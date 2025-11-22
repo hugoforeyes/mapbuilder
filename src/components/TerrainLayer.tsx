@@ -8,7 +8,7 @@ interface TerrainLayerProps {
 }
 
 export interface TerrainLayerRef {
-    paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity?: number, softness?: number) => void;
+    paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity?: number, softness?: number, color?: string) => void;
     getDataURL: () => string;
 }
 
@@ -34,91 +34,141 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
             };
             img.src = initialData;
         } else if (ctx) {
-            // Initialize with a transparent or base color if needed
-            ctx.clearRect(0, 0, width, height);
+            // Initialize with white background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
         }
     }, [width, height, initialData]);
 
+    // Helper to create procedural patterns
+    const createBrushPattern = (type: string, color: string, ctx: CanvasRenderingContext2D) => {
+        const patternCanvas = document.createElement('canvas');
+        const size = 24;
+        patternCanvas.width = size;
+        patternCanvas.height = size;
+        const pctx = patternCanvas.getContext('2d');
+        if (!pctx) return null;
+
+        pctx.clearRect(0, 0, size, size);
+
+        switch (type) {
+            case 'solid':
+                pctx.fillStyle = color;
+                pctx.fillRect(0, 0, size, size);
+                break;
+            case 'dots':
+                pctx.fillStyle = color;
+                for (let x = 6; x < size; x += 12) {
+                    for (let y = 6; y < size; y += 12) {
+                        pctx.beginPath();
+                        pctx.arc(x, y, 3, 0, Math.PI * 2);
+                        pctx.fill();
+                    }
+                }
+                break;
+            case 'stripes':
+                pctx.strokeStyle = color;
+                pctx.lineWidth = 3;
+                for (let i = -size; i < size * 2; i += 8) {
+                    pctx.beginPath();
+                    pctx.moveTo(i, 0);
+                    pctx.lineTo(i + size, size);
+                    pctx.stroke();
+                }
+                break;
+            case 'noise':
+                pctx.fillStyle = color;
+                for (let i = 0; i < 150; i++) {
+                    const x = Math.random() * size;
+                    const y = Math.random() * size;
+                    const alpha = 0.3 + Math.random() * 0.7;
+                    pctx.globalAlpha = alpha;
+                    pctx.fillRect(x, y, 1, 1);
+                }
+                pctx.globalAlpha = 1;
+                break;
+            default:
+                pctx.fillStyle = color;
+                pctx.fillRect(0, 0, size, size);
+                break;
+        }
+        return ctx.createPattern(patternCanvas, 'repeat');
+    };
+
     useImperativeHandle(ref, () => ({
-        paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity = 1, softness = 0.5) => {
+        paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity = 1, softness = 0.5, color = '#000000') => {
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
-            const paintWithTexture = (img: HTMLImageElement) => {
+            const paintWithPattern = (pattern: CanvasPattern | null) => {
+                if (!pattern) return;
+
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
                 ctx.closePath();
 
-                // Improved Soft Brush:
-                // 1. Create a temp canvas for the brush tip
-                // 2. Draw the pattern on the temp canvas
-                // 3. Apply a radial gradient alpha mask to the temp canvas
-                // 4. Draw the temp canvas onto the main canvas
-
                 const tipCanvas = document.createElement('canvas');
-                tipCanvas.width = brushSize * 2; // Extra space for blur
+                tipCanvas.width = brushSize * 2;
                 tipCanvas.height = brushSize * 2;
                 const tipCtx = tipCanvas.getContext('2d');
                 if (tipCtx) {
-                    const pattern = tipCtx.createPattern(img, 'repeat');
-                    if (pattern) {
-                        // Draw pattern on tip canvas
-                        // Offset pattern to match world coordinates
-                        const matrix = new DOMMatrix();
-                        matrix.translateSelf(0, 0); // Reset
-                        pattern.setTransform(matrix);
+                    // Draw pattern on tip canvas
+                    const matrix = new DOMMatrix();
+                    pattern.setTransform(matrix);
 
-                        // We need to translate the pattern so it stays fixed relative to the world (canvas)
-                        // The tip canvas is at (x - brushSize, y - brushSize) relative to main canvas
-                        // So we need to offset the pattern by -(x - brushSize), -(y - brushSize)
+                    // Translate pattern to match world coordinates
+                    tipCtx.translate(-(x - brushSize), -(y - brushSize));
+                    tipCtx.fillStyle = pattern;
+                    tipCtx.fillRect(x - brushSize, y - brushSize, brushSize * 2, brushSize * 2);
 
-                        tipCtx.translate(-(x - brushSize), -(y - brushSize));
-                        tipCtx.fillStyle = pattern;
-                        tipCtx.fillRect(x - brushSize, y - brushSize, brushSize * 2, brushSize * 2);
+                    // Reset transform
+                    tipCtx.setTransform(1, 0, 0, 1, 0, 0);
 
-                        // Reset transform for the mask
-                        tipCtx.setTransform(1, 0, 0, 1, 0, 0);
+                    // Apply radial gradient for softness
+                    tipCtx.globalCompositeOperation = 'destination-in';
+                    const gradient = tipCtx.createRadialGradient(
+                        brushSize, brushSize, (brushSize / 2) * (1 - softness),
+                        brushSize, brushSize, brushSize / 2
+                    );
+                    gradient.addColorStop(0, `rgba(0, 0, 0, ${opacity})`);
+                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-                        // Apply radial gradient for softness
-                        tipCtx.globalCompositeOperation = 'destination-in';
-                        const gradient = tipCtx.createRadialGradient(
-                            brushSize, brushSize, brushSize * (1 - softness),
-                            brushSize, brushSize, brushSize / 2
-                        );
-                        gradient.addColorStop(0, `rgba(0, 0, 0, ${opacity})`);
-                        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    tipCtx.fillStyle = gradient;
+                    tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
 
-                        tipCtx.fillStyle = gradient;
-                        tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
-
-                        // Draw tip onto main canvas
-                        ctx.drawImage(tipCanvas, x - brushSize, y - brushSize);
-                    }
+                    // Draw tip onto main canvas
+                    ctx.drawImage(tipCanvas, x - brushSize, y - brushSize);
                 }
 
                 ctx.restore();
 
-                // Force Konva update
                 if (imageRef.current) {
                     const layer = imageRef.current.getLayer();
                     if (layer) layer.batchDraw();
                 }
             };
 
-            if (textureCache.current[textureSrc]) {
-                paintWithTexture(textureCache.current[textureSrc]);
+            // Check if textureSrc is a procedural type
+            if (['solid', 'dots', 'stripes', 'noise'].includes(textureSrc)) {
+                const pattern = createBrushPattern(textureSrc, color, ctx);
+                paintWithPattern(pattern);
             } else {
-                const img = new Image();
-                img.src = textureSrc;
-                img.onload = () => {
-                    textureCache.current[textureSrc] = img;
-                    paintWithTexture(img);
-                };
-                img.onerror = (err) => {
-                    console.error('Failed to load texture:', textureSrc, err);
-                };
+                // Image texture logic
+                if (textureCache.current[textureSrc]) {
+                    const img = textureCache.current[textureSrc];
+                    const pattern = ctx.createPattern(img, 'repeat');
+                    paintWithPattern(pattern);
+                } else {
+                    const img = new Image();
+                    img.src = textureSrc;
+                    img.onload = () => {
+                        textureCache.current[textureSrc] = img;
+                        const pattern = ctx.createPattern(img, 'repeat');
+                        paintWithPattern(pattern);
+                    };
+                }
             }
         },
         getDataURL: () => {
