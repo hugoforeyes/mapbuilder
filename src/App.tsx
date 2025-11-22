@@ -8,7 +8,8 @@ import type { MapItem, ToolType } from './types';
 
 function App() {
   const [selectedTool, setSelectedTool] = useState<ToolType>('select');
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
+  const [selectedBrushTexture, setSelectedBrushTexture] = useState<string | null>(null);
+  const [selectedItemAsset, setSelectedItemAsset] = useState<string | null>(null);
   const [terrainData, setTerrainData] = useState<string | null>(null);
   const [items, setItems] = useState<MapItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -16,6 +17,11 @@ function App() {
 
   // New State for Reference Style UI
   const [brushSize, setBrushSize] = useState(100);
+  const [brushOpacity, setBrushOpacity] = useState(1);
+  const [brushSoftness, setBrushSoftness] = useState(0.5);
+  const [brushShape, setBrushShape] = useState<'circle' | 'rough'>('circle');
+  const [brushRoughness, setBrushRoughness] = useState(0.5);
+  const [brushSmooth, setBrushSmooth] = useState(false);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
   // Removed auto-resize logic to keep fixed default size
@@ -73,10 +79,20 @@ function App() {
 
         <ToolOptionsPanel
           selectedTool={selectedTool}
-          selectedAsset={selectedAsset}
+          selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
           onOpenCatalog={() => setIsCatalogOpen(true)}
           brushSize={brushSize}
           setBrushSize={setBrushSize}
+          brushOpacity={brushOpacity}
+          setBrushOpacity={setBrushOpacity}
+          brushSoftness={brushSoftness}
+          setBrushSoftness={setBrushSoftness}
+          brushShape={brushShape}
+          setBrushShape={setBrushShape}
+          brushRoughness={brushRoughness}
+          setBrushRoughness={setBrushRoughness}
+          brushSmooth={brushSmooth}
+          setBrushSmooth={setBrushSmooth}
         />
 
         <div className="flex-1 relative bg-zinc-950 overflow-hidden flex items-center justify-center">
@@ -87,13 +103,18 @@ function App() {
               terrainData={terrainData}
               items={items}
               selectedTool={selectedTool}
-              selectedAsset={selectedAsset}
+              selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
               onUpdateTerrain={handleUpdateTerrain}
               brushSize={brushSize}
               onAddItem={handleAddItem}
               onUpdateItem={handleUpdateItem}
               onSelectItem={setSelectedItemId}
               selectedItemId={selectedItemId}
+              brushOpacity={brushOpacity}
+              brushSoftness={brushSoftness}
+              brushShape={brushShape}
+              brushRoughness={brushRoughness}
+              brushSmooth={brushSmooth}
             />
           </div>
         </div>
@@ -114,10 +135,14 @@ function App() {
                 <RightPanel
                   selectedTool={selectedTool}
                   onSelectAsset={(asset) => {
-                    setSelectedAsset(asset);
+                    if (selectedTool === 'brush') {
+                      setSelectedBrushTexture(asset);
+                    } else if (selectedTool === 'item') {
+                      setSelectedItemAsset(asset);
+                    }
                     setIsCatalogOpen(false);
                   }}
-                  selectedAsset={selectedAsset}
+                  selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
                   items={items}
                   onSelectItem={setSelectedItemId}
                   selectedItemId={selectedItemId}

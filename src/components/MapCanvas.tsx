@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Stage, Layer, Image as KonvaImage, Transformer, Circle } from 'react-konva';
 import useImage from 'use-image';
 import type { MapItem, ToolType } from '../types';
@@ -19,6 +19,11 @@ interface MapCanvasProps {
     onUpdateItem: (id: string, newAttrs: Partial<MapItem>) => void;
     onSelectItem: (id: string | null) => void;
     selectedItemId: string | null;
+    brushOpacity: number;
+    brushSoftness: number;
+    brushShape: 'circle' | 'rough';
+    brushRoughness: number;
+    brushSmooth: boolean;
 }
 
 const URLImage = ({ src, ...props }: any) => {
@@ -59,6 +64,26 @@ const BrushCursor = ({ x, y, radius, src }: { x: number; y: number; radius: numb
     );
 };
 
+const ItemCursor = ({ x, y, src }: { x: number; y: number; src: string | null }) => {
+    const [image] = useImage(src || '');
+
+    if (!src || !image) return null;
+
+    return (
+        <KonvaImage
+            image={image}
+            x={x}
+            y={y}
+            width={100} // Default size matching item placement
+            height={100}
+            offsetX={50} // Center the image on cursor
+            offsetY={50}
+            opacity={0.5}
+            listening={false}
+        />
+    );
+};
+
 const MapCanvas: React.FC<MapCanvasProps> = ({
     width,
     height,
@@ -72,6 +97,11 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     onUpdateItem,
     onSelectItem,
     selectedItemId,
+    brushOpacity,
+    brushSoftness,
+    brushShape,
+    brushRoughness,
+    brushSmooth,
 }) => {
     const stageRef = useRef<Konva.Stage>(null);
     const trRef = useRef<Konva.Transformer>(null);
@@ -80,6 +110,27 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     const [stageScale, setStageScale] = useState(1);
     const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
     const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+
+    const lastPaintPos = useRef<{ x: number; y: number } | null>(null);
+
+    useEffect(() => {
+        if (selectedItemId && trRef.current && stageRef.current) {
+            // We need to wait for the node to be rendered
+            const node = stageRef.current.findOne('#' + selectedItemId);
+            if (node) {
+                trRef.current.nodes([node]);
+                trRef.current.getLayer()?.batchDraw();
+            } else {
+                // If node not found yet (e.g. first render), try again in next tick or just clear
+                // React Konva usually handles this if we rely on re-renders, but with manual node setting we might need to be careful.
+                // For now, let's clear if not found, but it should be found if rendered.
+                trRef.current.nodes([]);
+            }
+        } else if (trRef.current) {
+            trRef.current.nodes([]);
+            trRef.current.getLayer()?.batchDraw();
+        }
+    }, [selectedItemId, items]); // Depend on items to retry if item added
 
     const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
         e.evt.preventDefault();
@@ -114,7 +165,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
             isPainting.current = true;
             const pos = stage.getRelativePointerPosition();
             if (pos && terrainLayerRef.current) {
-                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset);
+                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                lastPaintPos.current = pos;
             }
         }
     };
@@ -123,8 +175,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         const stage = e.target.getStage();
         if (!stage) return;
 
-        // Update cursor position for brush tool
-        if (selectedTool === 'brush') {
+        // Update cursor position for brush and item tools
+        if (selectedTool === 'brush' || (selectedTool === 'item' && selectedAsset)) {
             const pos = stage.getRelativePointerPosition();
             if (pos) {
                 setCursorPos(pos);
@@ -138,7 +190,26 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         if (selectedTool === 'brush' && selectedAsset) {
             const pos = stage.getRelativePointerPosition();
             if (pos && terrainLayerRef.current) {
-                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset);
+                // Calculate distance from last paint position
+                if (lastPaintPos.current) {
+                    const dx = pos.x - lastPaintPos.current.x;
+                    const dy = pos.y - lastPaintPos.current.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // Only paint if moved enough (spacing)
+                    // For rough brush, we need more spacing to preserve the rough look
+                    // For circle brush, we can use smaller spacing for smoother lines
+                    const spacing = brushShape === 'rough' ? brushSize * 0.25 : brushSize * 0.1;
+
+                    if (distance >= spacing) {
+                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                        lastPaintPos.current = pos;
+                    }
+                } else {
+                    // First paint (should have been handled by mousedown but just in case)
+                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                    lastPaintPos.current = pos;
+                }
             }
         }
     };
@@ -149,6 +220,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
             if (terrainLayerRef.current) {
                 onUpdateTerrain(terrainLayerRef.current.getDataURL());
             }
+            lastPaintPos.current = null;
         }
     };
 
@@ -191,9 +263,9 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                 width={width}
                 height={height}
                 onMouseDown={(e) => {
-                    handleStageClick(e);
                     handleStageMouseDown(e);
                 }}
+                onClick={handleStageClick}
                 onMouseMove={handleStageMouseMove}
                 onMouseUp={handleStageMouseUp}
                 onWheel={handleWheel}
@@ -203,10 +275,13 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                 scaleX={stageScale}
                 scaleY={stageScale}
                 onDragEnd={(e) => {
-                    setStagePos({
-                        x: e.target.x(),
-                        y: e.target.y(),
-                    });
+                    // Only update stage position if the stage itself was dragged
+                    if (e.target === e.currentTarget) {
+                        setStagePos({
+                            x: e.target.x(),
+                            y: e.target.y(),
+                        });
+                    }
                 }}
                 ref={stageRef}
                 className={
@@ -268,8 +343,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                                 }
                                 return newBox;
                             }}
-                            // Attach to selected node
-                            node={items.find(i => i.id === selectedItemId) ? stageRef.current?.findOne(`#${selectedItemId}`) : undefined}
+                        // Attach to selected node
+                        // node={items.find(i => i.id === selectedItemId) ? stageRef.current?.findOne(`#${selectedItemId}`) : undefined}
                         />
                     )}
                 </Layer>
@@ -280,6 +355,13 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                             x={cursorPos.x}
                             y={cursorPos.y}
                             radius={brushSize / 2}
+                            src={selectedAsset}
+                        />
+                    )}
+                    {selectedTool === 'item' && cursorPos && selectedAsset && (
+                        <ItemCursor
+                            x={cursorPos.x}
+                            y={cursorPos.y}
                             src={selectedAsset}
                         />
                     )}

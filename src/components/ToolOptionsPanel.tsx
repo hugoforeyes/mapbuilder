@@ -7,6 +7,16 @@ interface ToolOptionsPanelProps {
     onOpenCatalog: () => void;
     brushSize: number;
     setBrushSize: (size: number) => void;
+    brushOpacity: number;
+    setBrushOpacity: (opacity: number) => void;
+    brushSoftness: number;
+    setBrushSoftness: (softness: number) => void;
+    brushShape: 'circle' | 'rough';
+    setBrushShape: (shape: 'circle' | 'rough') => void;
+    brushRoughness: number;
+    setBrushRoughness: (roughness: number) => void;
+    brushSmooth: boolean;
+    setBrushSmooth: (smooth: boolean) => void;
 }
 
 const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
@@ -15,6 +25,16 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
     onOpenCatalog,
     brushSize,
     setBrushSize,
+    brushOpacity,
+    setBrushOpacity,
+    brushSoftness,
+    setBrushSoftness,
+    brushShape,
+    setBrushShape,
+    brushRoughness,
+    setBrushRoughness,
+    brushSmooth,
+    setBrushSmooth,
 }) => {
     if (selectedTool === 'select' || selectedTool === 'hand') return null;
 
@@ -94,14 +114,23 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
                     <div>
                         <div className="text-xs font-medium text-zinc-500 mb-2 uppercase tracking-wider font-fantasy">Mode</div>
                         <div className="flex space-x-2">
-                            <button className="p-1 bg-gold-600 text-white rounded shadow-sm">
+                            <button
+                                onClick={() => setBrushShape('circle')}
+                                className={`p-1 rounded shadow-sm ${brushShape === 'circle' ? 'bg-gold-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+                                title="Circle Brush"
+                            >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                                 </svg>
                             </button>
-                            <button className="p-1 bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded">
+                            <button
+                                onClick={() => setBrushShape('rough')}
+                                className={`p-1 rounded shadow-sm ${brushShape === 'rough' ? 'bg-gold-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+                                title="Rough Brush"
+                            >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                    <path d="M10 2a8 8 0 00-8 8c0 4.418 3.582 8 8 8s8-3.582 8-8a8 8 0 00-8-8zm0 14c-3.314 0-6-2.686-6-6 0-3.314 2.686-6 6-6 3.314 0 6 2.686 6 6 0 3.314-2.686 6-6 6z" />
+                                    <path d="M10 4a6 6 0 00-6 6c0 3.314 2.686 6 6 6s6-2.686 6-6a6 6 0 00-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" opacity="0.5" />
                                 </svg>
                             </button>
                         </div>
@@ -122,46 +151,76 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
                         />
                     </div>
 
+                    <div className="flex justify-between text-xs text-zinc-400 mb-1 font-fantasy">
+                        <span>Opacity</span>
+                        <span>{Math.round(brushOpacity * 100)}%</span>
+                    </div>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={brushOpacity}
+                        onChange={(e) => setBrushOpacity(Number(e.target.value))}
+                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
+                    />
+                </div>
+
+                {selectedTool === 'brush' && brushShape !== 'rough' && (
                     <div>
                         <div className="flex justify-between text-xs text-zinc-400 mb-1 font-fantasy">
-                            <span>Opacity</span>
-                            <span>100</span>
+                            <span>Softness</span>
+                            <span>{brushSoftness}</span>
                         </div>
                         <input
                             type="range"
                             min="0"
-                            max="100"
-                            defaultValue="100"
+                            max="1"
+                            step="0.1"
+                            value={brushSoftness}
+                            onChange={(e) => setBrushSoftness(Number(e.target.value))}
                             className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
                         />
                     </div>
+                )}
 
-                    {selectedTool === 'brush' && (
+                {selectedTool === 'brush' && brushShape === 'rough' && (
+                    <>
                         <div>
                             <div className="flex justify-between text-xs text-zinc-400 mb-1 font-fantasy">
-                                <span>Softness</span>
-                                <span>0.5</span>
+                                <span>Roughness</span>
+                                <span>{brushRoughness}</span>
                             </div>
                             <input
                                 type="range"
                                 min="0"
-                                max="1"
-                                step="0.1"
-                                defaultValue="0.5"
+                                max="32"
+                                step="1"
+                                value={brushRoughness}
+                                onChange={(e) => setBrushRoughness(Number(e.target.value))}
                                 className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
                             />
                         </div>
-                    )}
-                </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs text-zinc-400 font-fantasy">Smooth Edges</span>
+                            <input
+                                type="checkbox"
+                                checked={brushSmooth}
+                                onChange={(e) => setBrushSmooth(e.target.checked)}
+                                className="w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-gold-500 focus:ring-gold-500/50"
+                            />
+                        </div>
+                    </>
+                )}
+            </div>
 
-                <div className="pt-2 border-t border-zinc-700">
-                    <button className="w-full flex items-center justify-between text-xs text-zinc-400 hover:text-gold-400 font-fantasy">
-                        <span>Advanced Settings</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </button>
-                </div>
+            <div className="pt-2 border-t border-zinc-700">
+                <button className="w-full flex items-center justify-between text-xs text-zinc-400 hover:text-gold-400 font-fantasy">
+                    <span>Advanced Settings</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
             </div>
         </div>
     );

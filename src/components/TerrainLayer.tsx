@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef, memo } from 'react';
 import { Image as KonvaImage } from 'react-konva';
 
 interface TerrainLayerProps {
@@ -8,21 +8,24 @@ interface TerrainLayerProps {
 }
 
 export interface TerrainLayerRef {
-    paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity?: number, softness?: number, color?: string) => void;
+    paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean) => void;
     getDataURL: () => string;
 }
 
 const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, height, initialData }, ref) => {
-    const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'));
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    if (!canvasRef.current) {
+        canvasRef.current = document.createElement('canvas');
+    }
     const imageRef = useRef<any>(null);
 
     // Cache for loaded texture images to avoid reloading on every paint
     const textureCache = useRef<{ [key: string]: HTMLImageElement }>({});
 
     useEffect(() => {
-        const canvas = canvasRef.current;
-        canvas.width = width;
-        canvas.height = height;
+        const canvas = canvasRef.current!;
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (ctx && initialData) {
             const img = new Image();
@@ -96,18 +99,14 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
     };
 
     useImperativeHandle(ref, () => ({
-        paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity = 1, softness = 0.5, color = '#000000') => {
+        paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity = 1, softness = 0.5, color = '#000000', shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false) => {
             const canvas = canvasRef.current;
+            if (!canvas) return;
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
             const paintWithPattern = (pattern: CanvasPattern | null) => {
                 if (!pattern) return;
-
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
-                ctx.closePath();
 
                 const tipCanvas = document.createElement('canvas');
                 tipCanvas.width = brushSize * 2;
@@ -121,22 +120,109 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                     // Translate pattern to match world coordinates
                     tipCtx.translate(-(x - brushSize), -(y - brushSize));
                     tipCtx.fillStyle = pattern;
-                    tipCtx.fillRect(x - brushSize, y - brushSize, brushSize * 2, brushSize * 2);
+
+                    if (shape === 'rough') {
+                        // Draw rough shape on tip canvas
+                        tipCtx.beginPath();
+                        // We need deterministic roughness for the tip to match the main path if we want exact match, 
+                        // but since we are just masking, maybe random is fine or we seed it?
+                        // For now let's just use a simple rough circle logic again or just fill rect if we rely on destination-in later?
+                        // Actually, we need to fill the shape with the pattern.
+
+                        // Let's just fill a rect for now, the destination-in step will cut it to shape.
+                        tipCtx.fillRect(x - brushSize, y - brushSize, brushSize * 2, brushSize * 2);
+                    } else {
+                        tipCtx.fillRect(x - brushSize, y - brushSize, brushSize * 2, brushSize * 2);
+                    }
 
                     // Reset transform
                     tipCtx.setTransform(1, 0, 0, 1, 0, 0);
 
                     // Apply radial gradient for softness
                     tipCtx.globalCompositeOperation = 'destination-in';
-                    const gradient = tipCtx.createRadialGradient(
-                        brushSize, brushSize, (brushSize / 2) * (1 - softness),
-                        brushSize, brushSize, brushSize / 2
-                    );
-                    gradient.addColorStop(0, `rgba(0, 0, 0, ${opacity})`);
-                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-                    tipCtx.fillStyle = gradient;
-                    tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
+                    if (softness === 0) {
+                        // Hard brush
+                        tipCtx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
+                        tipCtx.beginPath();
+
+                        if (shape === 'rough') {
+                            const points = 20;
+                            const radius = brushSize / 2;
+                            const pathPoints: { x: number, y: number }[] = [];
+
+                            for (let i = 0; i <= points; i++) {
+                                const angle = (i / points) * Math.PI * 2;
+                                const variation = roughness * 0.05;
+                                const r = radius * (1 - variation / 2 + Math.random() * variation);
+                                const px = brushSize + Math.cos(angle) * r;
+                                const py = brushSize + Math.sin(angle) * r;
+                                pathPoints.push({ x: px, y: py });
+                            }
+
+                            if (smooth) {
+                                tipCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+                                for (let i = 1; i < pathPoints.length - 2; i++) {
+                                    const xc = (pathPoints[i].x + pathPoints[i + 1].x) / 2;
+                                    const yc = (pathPoints[i].y + pathPoints[i + 1].y) / 2;
+                                    tipCtx.quadraticCurveTo(pathPoints[i].x, pathPoints[i].y, xc, yc);
+                                }
+                                tipCtx.quadraticCurveTo(
+                                    pathPoints[pathPoints.length - 2].x,
+                                    pathPoints[pathPoints.length - 2].y,
+                                    pathPoints[pathPoints.length - 1].x,
+                                    pathPoints[pathPoints.length - 1].y
+                                );
+                            } else {
+                                tipCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+                                for (let i = 1; i < pathPoints.length; i++) {
+                                    tipCtx.lineTo(pathPoints[i].x, pathPoints[i].y);
+                                }
+                            }
+                        } else {
+                            tipCtx.arc(brushSize, brushSize, brushSize / 2, 0, Math.PI * 2);
+                        }
+
+                        tipCtx.fill();
+                    } else {
+                        // For soft rough brush, we need a gradient that follows the rough shape? 
+                        // Standard radial gradient is circular. 
+                        // For now, let's just use the circular gradient for soft brush, maybe 'rough' only applies to hard edges or we mask the gradient?
+
+                        // Let's try to mask the gradient with a rough shape if shape is rough
+
+                        const gradient = tipCtx.createRadialGradient(
+                            brushSize, brushSize, (brushSize / 2) * (1 - softness),
+                            brushSize, brushSize, brushSize / 2
+                        );
+                        gradient.addColorStop(0, `rgba(0, 0, 0, ${opacity})`);
+                        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                        tipCtx.fillStyle = gradient;
+
+                        if (shape === 'rough') {
+                            // Mask the gradient with rough shape? 
+                            // Actually, if we want a "rough" soft brush, it's complex. 
+                            // Let's just apply the rough mask to the gradient rect.
+
+                            // Clear rect first? No we want to draw the gradient THEN cut it? 
+                            // No, we are drawing the "alpha map" here to destination-in the pattern.
+
+                            // Let's draw the gradient, then use destination-in with a rough shape?
+                            // Or just draw the gradient. 
+                            // If user wants rough shape, usually they want the edge to be rough.
+                            // If softness > 0, the edge is faded.
+                            // Let's stick to circular gradient for soft brush for now, as rough soft brush is hard to notice roughness.
+                            // OR we can multiply the gradient with noise?
+
+                            // For simplicity, let's just use the standard gradient for now even if rough, 
+                            // or maybe modulate the outer radius?
+
+                            tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
+                        } else {
+                            tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
+                        }
+                    }
 
                     // Draw tip onto main canvas
                     ctx.drawImage(tipCanvas, x - brushSize, y - brushSize);
@@ -172,7 +258,7 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
             }
         },
         getDataURL: () => {
-            return canvasRef.current.toDataURL();
+            return canvasRef.current?.toDataURL() || '';
         }
     }));
 
@@ -187,4 +273,4 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
     );
 });
 
-export default TerrainLayer;
+export default memo(TerrainLayer);
