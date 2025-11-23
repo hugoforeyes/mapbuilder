@@ -24,6 +24,7 @@ interface MapCanvasProps {
     brushShape: 'circle' | 'rough';
     brushRoughness: number;
     brushSmooth: boolean;
+    selectedLayer?: 'background' | 'foreground';
     itemPlacementMode?: 'single' | 'multiple';
     isRandomPlacement?: boolean;
     selectedItemGroup?: string[] | null;
@@ -106,6 +107,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     brushShape,
     brushRoughness,
     brushSmooth,
+    selectedLayer = 'foreground',
     itemPlacementMode = 'single',
     isRandomPlacement,
     selectedItemGroup,
@@ -183,7 +185,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
             isPainting.current = true;
             const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
-                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, selectedLayer, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
                 lastPaintPos.current = pos;
             }
         } else if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'multiple') {
@@ -239,12 +241,12 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                     const spacing = brushShape === 'rough' ? brushSize * 0.25 : brushSize * 0.1;
 
                     if (distance >= spacing) {
-                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, selectedLayer, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
                         lastPaintPos.current = pos;
                     }
                 } else {
                     // First paint (should have been handled by mousedown but just in case)
-                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, selectedLayer, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
                     lastPaintPos.current = pos;
                 }
             }

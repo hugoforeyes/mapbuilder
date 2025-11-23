@@ -17,6 +17,8 @@ interface ToolOptionsPanelProps {
     setBrushRoughness: (roughness: number) => void;
     brushSmooth: boolean;
     setBrushSmooth: (smooth: boolean) => void;
+    selectedLayer?: 'background' | 'foreground';
+    setSelectedLayer?: (layer: 'background' | 'foreground') => void;
     selectedGroup?: string[] | null;
     onSelectAsset?: (asset: string) => void;
     onClose: () => void;
@@ -42,6 +44,8 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
     setBrushRoughness,
     brushSmooth,
     setBrushSmooth,
+    selectedLayer,
+    setSelectedLayer,
     selectedGroup,
     onSelectAsset,
     onClose,
@@ -74,8 +78,22 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
                 {selectedTool === 'brush' && (
                     <div className="space-y-3">
                         <div>
-                            <div className="text-xs font-medium text-zinc-500 mb-2 uppercase tracking-wider font-fantasy">Brush Settings</div>
-                            {/* Procedural options removed */}
+                            <div className="text-xs font-medium text-zinc-500 mb-2 uppercase tracking-wider font-fantasy">Brush Layers</div>
+                            {/* Layer Selection */}
+                            <div className="flex bg-zinc-800 rounded p-0.5 border border-zinc-700 mb-2">
+                                <button
+                                    onClick={() => setSelectedLayer?.('background')}
+                                    className={`flex-1 py-1 px-2 text-[10px] font-medium rounded transition-colors ${selectedLayer === 'background' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                >
+                                    Background
+                                </button>
+                                <button
+                                    onClick={() => setSelectedLayer?.('foreground')}
+                                    className={`flex-1 py-1 px-2 text-[10px] font-medium rounded transition-colors ${selectedLayer === 'foreground' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                >
+                                    Foreground
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

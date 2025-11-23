@@ -18,10 +18,11 @@ function App() {
   // New State for Reference Style UI
   const [brushSize, setBrushSize] = useState(100);
   const [brushOpacity, setBrushOpacity] = useState(1);
-  const [brushSoftness, setBrushSoftness] = useState(0.5);
+  const [brushSoftness, setBrushSoftness] = useState(0);
   const [brushShape, setBrushShape] = useState<'circle' | 'rough'>('circle');
   const [brushRoughness, setBrushRoughness] = useState(8);
   const [brushSmooth, setBrushSmooth] = useState(true);
+  const [selectedLayer, setSelectedLayer] = useState<'background' | 'foreground'>('foreground');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [selectedBrushGroup, setSelectedBrushGroup] = useState<string[] | null>(null);
   const [selectedItemGroup, setSelectedItemGroup] = useState<string[] | null>(null);
@@ -96,6 +97,8 @@ function App() {
           setBrushRoughness={setBrushRoughness}
           brushSmooth={brushSmooth}
           setBrushSmooth={setBrushSmooth}
+          selectedLayer={selectedLayer}
+          setSelectedLayer={setSelectedLayer}
           selectedGroup={selectedTool === 'brush' ? selectedBrushGroup : selectedItemGroup}
           onSelectAsset={(asset) => {
             if (selectedTool === 'brush') {
@@ -131,6 +134,7 @@ function App() {
               brushShape={brushShape}
               brushRoughness={brushRoughness}
               brushSmooth={brushSmooth}
+              selectedLayer={selectedLayer}
               itemPlacementMode={itemPlacementMode}
               isRandomPlacement={isRandomPlacement}
               selectedItemGroup={selectedItemGroup}

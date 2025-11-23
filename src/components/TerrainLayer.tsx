@@ -8,50 +8,124 @@ interface TerrainLayerProps {
 }
 
 export interface TerrainLayerRef {
-    paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean) => void;
+    paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean) => void;
     getDataURL: () => string;
 }
 
 const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, height, initialData }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    if (!canvasRef.current) {
-        canvasRef.current = document.createElement('canvas');
-    }
+    const foregroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const backgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const imageRef = useRef<any>(null);
 
     // Cache for loaded texture images to avoid reloading on every paint
     const textureCache = useRef<{ [key: string]: HTMLImageElement }>({});
 
+    // Initialize canvases
+    if (!canvasRef.current) {
+        canvasRef.current = document.createElement('canvas');
+    }
+    if (!foregroundCanvasRef.current) {
+        foregroundCanvasRef.current = document.createElement('canvas');
+    }
+    if (!backgroundCanvasRef.current) {
+        backgroundCanvasRef.current = document.createElement('canvas');
+    }
+
+    const compose = () => {
+        const canvas = canvasRef.current;
+        const foregroundCanvas = foregroundCanvasRef.current;
+        const backgroundCanvas = backgroundCanvasRef.current;
+        if (!canvas || !foregroundCanvas || !backgroundCanvas) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Clear main canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Draw Background
+        ctx.drawImage(backgroundCanvas, 0, 0);
+
+        // 2. Draw Foreground with Border Effects (Ripple)
+        // We draw from outer to inner
+
+        // Outer Ripple
+        ctx.save();
+        ctx.shadowColor = 'rgba(100, 200, 255, 0.4)';
+        ctx.shadowBlur = 20;
+        ctx.drawImage(foregroundCanvas, 0, 0);
+        ctx.restore();
+
+        // Middle Ripple
+        ctx.save();
+        ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
+        ctx.shadowBlur = 10;
+        ctx.drawImage(foregroundCanvas, 0, 0);
+        ctx.restore();
+
+        // Inner Ripple / Glow
+        ctx.save();
+        ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+        ctx.shadowBlur = 5;
+        ctx.drawImage(foregroundCanvas, 0, 0);
+        ctx.restore();
+
+        // 3. Draw Foreground on top
+        ctx.drawImage(foregroundCanvas, 0, 0);
+
+        // Update Konva layer
+        if (imageRef.current) {
+            const layer = imageRef.current.getLayer();
+            if (layer) layer.batchDraw();
+        }
+    };
+
     useEffect(() => {
         const canvas = canvasRef.current!;
-        if (canvas.width !== width) canvas.width = width;
-        if (canvas.height !== height) canvas.height = height;
+        const foregroundCanvas = foregroundCanvasRef.current!;
+        const backgroundCanvas = backgroundCanvasRef.current!;
+
+        if (canvas.width !== width) {
+            canvas.width = width;
+            foregroundCanvas.width = width;
+            backgroundCanvas.width = width;
+        }
+        if (canvas.height !== height) {
+            canvas.height = height;
+            foregroundCanvas.height = height;
+            backgroundCanvas.height = height;
+        }
+
         const ctx = canvas.getContext('2d');
-        if (ctx && initialData) {
-            const img = new Image();
-            img.onload = () => {
-                ctx.drawImage(img, 0, 0);
-                if (imageRef.current) {
-                    imageRef.current.getLayer().batchDraw();
-                }
-            };
-            img.src = initialData;
-        } else if (ctx) {
-            // Initialize with water texture by default
-            const img = new Image();
-            img.src = '/assets/background/FantasyWorld/water/asset_14.jpg';
-            img.onload = () => {
-                const pattern = ctx.createPattern(img, 'repeat');
-                if (pattern) {
-                    ctx.fillStyle = pattern;
-                    ctx.fillRect(0, 0, width, height);
-                    // We need to update the layer to show the changes
-                    if (imageRef.current) {
-                        const layer = imageRef.current.getLayer();
-                        if (layer) layer.batchDraw();
+        const bgCtx = backgroundCanvas.getContext('2d');
+
+        if (bgCtx) {
+            if (initialData) {
+                // If we have initial data, we assume it's the full map. 
+                // Ideally we would split it, but we can't. 
+                // So we treat it as "Water" (Background) for now so new painting goes on top.
+                // OR we treat it as "Land" if it was painted? 
+                // For now, let's load it into the Background canvas so it acts as the base.
+                const img = new Image();
+                img.onload = () => {
+                    bgCtx.drawImage(img, 0, 0);
+                    compose();
+                };
+                img.src = initialData;
+            } else {
+                // Initialize with water texture by default
+                const img = new Image();
+                img.src = '/assets/background/FantasyWorld/water/asset_14.jpg';
+                img.onload = () => {
+                    const pattern = bgCtx.createPattern(img, 'repeat');
+                    if (pattern) {
+                        bgCtx.fillStyle = pattern;
+                        bgCtx.fillRect(0, 0, width, height);
+                        compose();
                     }
-                }
-            };
+                };
+            }
         }
     }, [width, height, initialData]);
 
@@ -111,10 +185,10 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
     };
 
     useImperativeHandle(ref, () => ({
-        paint: (x: number, y: number, brushSize: number, textureSrc: string, opacity = 1, softness = 0.5, color = '#000000', shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false) => {
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
+        paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity = 1, softness = 0.5, color = '#000000', shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false) => {
+            const targetCanvas = layer === 'foreground' ? foregroundCanvasRef.current : backgroundCanvasRef.current;
+            if (!targetCanvas) return;
+            const ctx = targetCanvas.getContext('2d');
             if (!ctx) return;
 
             const paintWithPattern = (pattern: CanvasPattern | null) => {
@@ -134,14 +208,6 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                     tipCtx.fillStyle = pattern;
 
                     if (shape === 'rough') {
-                        // Draw rough shape on tip canvas
-                        tipCtx.beginPath();
-                        // We need deterministic roughness for the tip to match the main path if we want exact match, 
-                        // but since we are just masking, maybe random is fine or we seed it?
-                        // For now let's just use a simple rough circle logic again or just fill rect if we rely on destination-in later?
-                        // Actually, we need to fill the shape with the pattern.
-
-                        // Let's just fill a rect for now, the destination-in step will cut it to shape.
                         tipCtx.fillRect(x - brushSize, y - brushSize, brushSize * 2, brushSize * 2);
                     } else {
                         tipCtx.fillRect(x - brushSize, y - brushSize, brushSize * 2, brushSize * 2);
@@ -197,12 +263,6 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
 
                         tipCtx.fill();
                     } else {
-                        // For soft rough brush, we need a gradient that follows the rough shape? 
-                        // Standard radial gradient is circular. 
-                        // For now, let's just use the circular gradient for soft brush, maybe 'rough' only applies to hard edges or we mask the gradient?
-
-                        // Let's try to mask the gradient with a rough shape if shape is rough
-
                         const gradient = tipCtx.createRadialGradient(
                             brushSize, brushSize, (brushSize / 2) * (1 - softness),
                             brushSize, brushSize, brushSize / 2
@@ -211,41 +271,17 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                         gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
                         tipCtx.fillStyle = gradient;
-
-                        if (shape === 'rough') {
-                            // Mask the gradient with rough shape? 
-                            // Actually, if we want a "rough" soft brush, it's complex. 
-                            // Let's just apply the rough mask to the gradient rect.
-
-                            // Clear rect first? No we want to draw the gradient THEN cut it? 
-                            // No, we are drawing the "alpha map" here to destination-in the pattern.
-
-                            // Let's draw the gradient, then use destination-in with a rough shape?
-                            // Or just draw the gradient. 
-                            // If user wants rough shape, usually they want the edge to be rough.
-                            // If softness > 0, the edge is faded.
-                            // Let's stick to circular gradient for soft brush for now, as rough soft brush is hard to notice roughness.
-                            // OR we can multiply the gradient with noise?
-
-                            // For simplicity, let's just use the standard gradient for now even if rough, 
-                            // or maybe modulate the outer radius?
-
-                            tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
-                        } else {
-                            tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
-                        }
+                        tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
                     }
 
-                    // Draw tip onto main canvas
+                    // Draw tip onto target canvas
                     ctx.drawImage(tipCanvas, x - brushSize, y - brushSize);
                 }
 
                 ctx.restore();
 
-                if (imageRef.current) {
-                    const layer = imageRef.current.getLayer();
-                    if (layer) layer.batchDraw();
-                }
+                // Re-compose the layers
+                compose();
             };
 
             // Check if textureSrc is a procedural type
