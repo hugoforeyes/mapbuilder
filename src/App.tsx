@@ -8,7 +8,7 @@ import type { MapItem, ToolType } from './types';
 
 function App() {
   const [selectedTool, setSelectedTool] = useState<ToolType>('select');
-  const [selectedBrushTexture, setSelectedBrushTexture] = useState<string | null>(null);
+  const [selectedBrushTexture, setSelectedBrushTexture] = useState<string | null>('/assets/background/FantasyWorld/core/asset_7.jpg');
   const [selectedItemAsset, setSelectedItemAsset] = useState<string | null>(null);
   const [terrainData, setTerrainData] = useState<string | null>(null);
   const [items, setItems] = useState<MapItem[]>([]);
