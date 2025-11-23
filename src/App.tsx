@@ -13,7 +13,7 @@ function App() {
   const [terrainData, setTerrainData] = useState<string | null>(null);
   const [items, setItems] = useState<MapItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [canvasSize] = useState({ width: 1024, height: 768 });
+  const [canvasSize] = useState({ width: 2048, height: 1536 });
 
   // New State for Reference Style UI
   const [brushSize, setBrushSize] = useState(100);
@@ -23,6 +23,10 @@ function App() {
   const [brushRoughness, setBrushRoughness] = useState(0.5);
   const [brushSmooth, setBrushSmooth] = useState(false);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [selectedBrushGroup, setSelectedBrushGroup] = useState<string[] | null>(null);
+  const [selectedItemGroup, setSelectedItemGroup] = useState<string[] | null>(null);
+  const [itemPlacementMode, setItemPlacementMode] = useState<'single' | 'multiple'>('single');
+  const [isRandomPlacement, setIsRandomPlacement] = useState(true);
 
   // Removed auto-resize logic to keep fixed default size
 
@@ -33,7 +37,6 @@ function App() {
   const handleAddItem = (item: MapItem) => {
     setItems((prev) => [...prev, item]);
     setSelectedItemId(item.id);
-    setSelectedTool('select');
   };
 
   const handleUpdateItem = (id: string, newAttrs: Partial<MapItem>) => {
@@ -93,6 +96,19 @@ function App() {
           setBrushRoughness={setBrushRoughness}
           brushSmooth={brushSmooth}
           setBrushSmooth={setBrushSmooth}
+          selectedGroup={selectedTool === 'brush' ? selectedBrushGroup : selectedItemGroup}
+          onSelectAsset={(asset) => {
+            if (selectedTool === 'brush') {
+              setSelectedBrushTexture(asset);
+            } else {
+              setSelectedItemAsset(asset);
+            }
+          }}
+          onClose={() => setSelectedTool('select')}
+          itemPlacementMode={itemPlacementMode}
+          setItemPlacementMode={setItemPlacementMode}
+          isRandomPlacement={isRandomPlacement}
+          setIsRandomPlacement={setIsRandomPlacement}
         />
 
         <div className="flex-1 relative bg-zinc-950 overflow-hidden flex items-center justify-center">
@@ -115,6 +131,10 @@ function App() {
               brushShape={brushShape}
               brushRoughness={brushRoughness}
               brushSmooth={brushSmooth}
+              itemPlacementMode={itemPlacementMode}
+              isRandomPlacement={isRandomPlacement}
+              selectedItemGroup={selectedItemGroup}
+              onSelectAsset={setSelectedItemAsset}
             />
           </div>
         </div>
@@ -137,8 +157,24 @@ function App() {
                   onSelectAsset={(asset) => {
                     if (selectedTool === 'brush') {
                       setSelectedBrushTexture(asset);
+                      setSelectedBrushGroup(null);
                     } else if (selectedTool === 'item') {
                       setSelectedItemAsset(asset);
+                      setSelectedItemGroup(null);
+                    }
+                    setIsCatalogOpen(false);
+                  }}
+                  // @ts-ignore
+                  onSelectGroup={(group) => {
+                    // Also select the first item by default if none selected
+                    if (selectedTool === 'brush') {
+                      setSelectedBrushGroup(group);
+                      setSelectedBrushTexture(group[0]);
+                    } else {
+                      setSelectedItemGroup(group);
+                      setSelectedItemAsset(group[0]);
+                      setIsRandomPlacement(true);
+                      setItemPlacementMode('multiple');
                     }
                     setIsCatalogOpen(false);
                   }}

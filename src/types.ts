@@ -9,6 +9,7 @@ export interface MapItem {
     rotation: number;
     scaleX: number;
     scaleY: number;
+    opacity?: number;
 }
 
 export interface BackgroundTile {

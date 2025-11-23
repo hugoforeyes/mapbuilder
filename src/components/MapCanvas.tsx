@@ -24,6 +24,10 @@ interface MapCanvasProps {
     brushShape: 'circle' | 'rough';
     brushRoughness: number;
     brushSmooth: boolean;
+    itemPlacementMode?: 'single' | 'multiple';
+    isRandomPlacement?: boolean;
+    selectedItemGroup?: string[] | null;
+    onSelectAsset?: (asset: string) => void;
 }
 
 const URLImage = ({ src, ...props }: any) => {
@@ -64,7 +68,7 @@ const BrushCursor = ({ x, y, radius, src }: { x: number; y: number; radius: numb
     );
 };
 
-const ItemCursor = ({ x, y, src }: { x: number; y: number; src: string | null }) => {
+const ItemCursor = ({ x, y, src, size, opacity }: { x: number; y: number; src: string | null, size: number, opacity: number }) => {
     const [image] = useImage(src || '');
 
     if (!src || !image) return null;
@@ -74,11 +78,11 @@ const ItemCursor = ({ x, y, src }: { x: number; y: number; src: string | null })
             image={image}
             x={x}
             y={y}
-            width={100} // Default size matching item placement
-            height={100}
-            offsetX={50} // Center the image on cursor
-            offsetY={50}
-            opacity={0.5}
+            width={size}
+            height={size}
+            offsetX={size / 2}
+            offsetY={size / 2}
+            opacity={opacity}
             listening={false}
         />
     );
@@ -102,6 +106,10 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     brushShape,
     brushRoughness,
     brushSmooth,
+    itemPlacementMode = 'single',
+    isRandomPlacement,
+    selectedItemGroup,
+    onSelectAsset,
 }) => {
     const stageRef = useRef<Konva.Stage>(null);
     const trRef = useRef<Konva.Transformer>(null);
@@ -112,6 +120,16 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
 
     const lastPaintPos = useRef<{ x: number; y: number } | null>(null);
+
+    const getWorldPointerPosition = (stage: Konva.Stage) => {
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return null;
+        const scale = stage.scaleX();
+        return {
+            x: (pointer.x - stage.x()) / scale,
+            y: (pointer.y - stage.y()) / scale,
+        };
+    };
 
     useEffect(() => {
         if (selectedItemId && trRef.current && stageRef.current) {
@@ -163,9 +181,28 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         if (selectedTool === 'brush' && selectedAsset) {
             isPainting.current = true;
-            const pos = stage.getRelativePointerPosition();
+            const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
                 terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                lastPaintPos.current = pos;
+            }
+        } else if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'multiple') {
+            isPainting.current = true;
+            const pos = getWorldPointerPosition(stage);
+            if (pos) {
+                onAddItem({
+                    id: `item-${Date.now()}`,
+                    type: 'item',
+                    src: selectedAsset,
+                    x: pos.x - (brushSize / 2),
+                    y: pos.y - (brushSize / 2),
+                    width: brushSize,
+                    height: brushSize,
+                    rotation: 0,
+                    scaleX: 1,
+                    scaleY: 1,
+                    opacity: brushOpacity,
+                });
                 lastPaintPos.current = pos;
             }
         }
@@ -177,7 +214,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         // Update cursor position for brush and item tools
         if (selectedTool === 'brush' || (selectedTool === 'item' && selectedAsset)) {
-            const pos = stage.getRelativePointerPosition();
+            const pos = getWorldPointerPosition(stage);
             if (pos) {
                 setCursorPos(pos);
             }
@@ -188,7 +225,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         if (!isPainting.current) return;
 
         if (selectedTool === 'brush' && selectedAsset) {
-            const pos = stage.getRelativePointerPosition();
+            const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
                 // Calculate distance from last paint position
                 if (lastPaintPos.current) {
@@ -211,6 +248,85 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                     lastPaintPos.current = pos;
                 }
             }
+        } else if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'multiple') {
+            const pos = getWorldPointerPosition(stage);
+            if (pos) {
+                // Determine which asset to place
+                let assetToPlace = selectedAsset;
+                if (isRandomPlacement && selectedItemGroup && selectedItemGroup.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * selectedItemGroup.length);
+                    assetToPlace = selectedItemGroup[randomIndex];
+                }
+
+                if (lastPaintPos.current) {
+                    const dx = pos.x - lastPaintPos.current.x;
+                    const dy = pos.y - lastPaintPos.current.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // Spacing for items - use brushSize as spacing to avoid too much overlap
+                    const spacing = brushSize * 0.8;
+
+                    if (distance >= spacing) {
+                        // Check for collision with existing items
+                        const hasCollision = items.some(item => {
+                            const itemDx = pos.x - item.x;
+                            const itemDy = pos.y - item.y;
+                            const itemDist = Math.sqrt(itemDx * itemDx + itemDy * itemDy);
+                            // Simple collision: if distance is less than average radius * factor
+                            // Assuming item.width is roughly the size
+                            return itemDist < (brushSize / 2 + item.width / 2) * 0.6;
+                        });
+
+                        if (!hasCollision) {
+                            onAddItem({
+                                id: `item-${Date.now()}`,
+                                type: 'item',
+                                src: assetToPlace,
+                                x: pos.x - (brushSize / 2),
+                                y: pos.y - (brushSize / 2),
+                                width: brushSize,
+                                height: brushSize,
+                                rotation: 0,
+                                scaleX: 1,
+                                scaleY: 1,
+                                opacity: brushOpacity,
+                            });
+                            if (isRandomPlacement) {
+                                onSelectAsset?.(assetToPlace);
+                            }
+                            lastPaintPos.current = pos;
+                        }
+                    }
+                } else {
+                    // Check for collision with existing items
+                    const hasCollision = items.some(item => {
+                        const itemDx = pos.x - item.x;
+                        const itemDy = pos.y - item.y;
+                        const itemDist = Math.sqrt(itemDx * itemDx + itemDy * itemDy);
+                        return itemDist < (brushSize / 2 + item.width / 2) * 0.6;
+                    });
+
+                    if (!hasCollision) {
+                        onAddItem({
+                            id: `item-${Date.now()}`,
+                            type: 'item',
+                            src: assetToPlace,
+                            x: pos.x - (brushSize / 2),
+                            y: pos.y - (brushSize / 2),
+                            width: brushSize,
+                            height: brushSize,
+                            rotation: 0,
+                            scaleX: 1,
+                            scaleY: 1,
+                            opacity: brushOpacity,
+                        });
+                        if (isRandomPlacement) {
+                            onSelectAsset?.(assetToPlace);
+                        }
+                        lastPaintPos.current = pos;
+                    }
+                }
+            }
         }
     };
 
@@ -227,7 +343,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
         const stage = e.target.getStage();
         if (!stage) return;
-        const pointerPosition = stage.getPointerPosition();
+        const pointerPosition = getWorldPointerPosition(stage);
         if (!pointerPosition) return;
 
         // If clicking on empty space and tool is select, deselect
@@ -239,19 +355,30 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         // Brush Tool Logic is handled in mouse move/down/up now
 
         // Item Tool
-        if (selectedTool === 'item' && selectedAsset) {
+        if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'single') {
+            // Determine which asset to place
+            let assetToPlace = selectedAsset;
+            if (isRandomPlacement && selectedItemGroup && selectedItemGroup.length > 0) {
+                const randomIndex = Math.floor(Math.random() * selectedItemGroup.length);
+                assetToPlace = selectedItemGroup[randomIndex];
+            }
+
             onAddItem({
                 id: `item-${Date.now()}`,
                 type: 'item',
-                src: selectedAsset,
-                x: pointerPosition.x,
-                y: pointerPosition.y,
-                width: 100, // Default size, will be adjusted by image aspect ratio ideally
-                height: 100,
+                src: assetToPlace,
+                x: pointerPosition.x - (brushSize / 2),
+                y: pointerPosition.y - (brushSize / 2),
+                width: brushSize,
+                height: brushSize,
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
+                opacity: brushOpacity,
             });
+            if (isRandomPlacement) {
+                onSelectAsset?.(assetToPlace);
+            }
             // Switch to select tool after placing item? Or keep placing?
             // Let's keep placing for now.
         }
@@ -363,6 +490,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                             x={cursorPos.x}
                             y={cursorPos.y}
                             src={selectedAsset}
+                            size={brushSize}
+                            opacity={brushOpacity}
                         />
                     )}
                 </Layer>

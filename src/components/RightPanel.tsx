@@ -10,6 +10,7 @@ interface RightPanelProps {
     selectedItemId: string | null;
     onDeleteItem: (id: string) => void;
     selectedTool: ToolType;
+    onSelectGroup?: (group: string[]) => void;
 }
 
 const RightPanel: React.FC<RightPanelProps> = ({
@@ -19,7 +20,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
     onSelectItem,
     selectedItemId,
     onDeleteItem,
-    selectedTool
+    selectedTool,
+    onSelectGroup
 }) => {
     const [activeTab, setActiveTab] = useState<'assets' | 'layers'>('assets');
     const categories = Object.keys(assetsData);
@@ -27,6 +29,17 @@ const RightPanel: React.FC<RightPanelProps> = ({
         selectedTool === 'brush' ? 'background' : 'items'
     );
     const [searchTerm, setSearchTerm] = useState('');
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+    const toggleGroup = (groupName: string) => {
+        const newExpanded = new Set(expandedGroups);
+        if (newExpanded.has(groupName)) {
+            newExpanded.delete(groupName);
+        } else {
+            newExpanded.add(groupName);
+        }
+        setExpandedGroups(newExpanded);
+    };
 
     useEffect(() => {
         if (selectedTool === 'brush') {
@@ -112,32 +125,80 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                     acc[groupName].push(asset);
                                     return acc;
                                 }, {})
-                            ).map(([groupName, groupAssets]: [string, string[]]) => (
-                                <div key={groupName} className="mb-4">
-                                    <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 px-1 sticky top-0 bg-zinc-900/95 backdrop-blur-sm py-1 z-10 border-b border-zinc-800/50">
-                                        {groupName.replace(/_/g, ' ')}
+                            ).map(([groupName, groupAssets]: [string, string[]]) => {
+                                // Group assets by base name (e.g. Tree_1, Tree_2 -> Tree)
+                                const groupedItems = groupAssets.reduce((acc: { [key: string]: string[] }, asset) => {
+                                    const fileName = asset.split('/').pop() || '';
+                                    // Remove extension
+                                    const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+
+                                    let baseName = nameWithoutExt;
+                                    // Only group items if NOT using the brush tool
+                                    if (selectedTool !== 'brush') {
+                                        const match = nameWithoutExt.match(/^(.*)_\d+$/);
+                                        if (match) baseName = match[1];
+                                    }
+
+                                    if (!acc[baseName]) acc[baseName] = [];
+                                    acc[baseName].push(asset);
+                                    return acc;
+                                }, {});
+
+                                return (
+                                    <div key={groupName} className="mb-4">
+                                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 px-1 sticky top-0 bg-zinc-900/95 backdrop-blur-sm py-1 z-10 border-b border-zinc-800/50">
+                                            {groupName.replace(/_/g, ' ')}
+                                        </div>
+                                        <div className="grid grid-cols-4 gap-2 content-start">
+                                            {Object.entries(groupedItems).map(([baseName, items]) => {
+                                                const isGroup = items.length > 1;
+                                                const isExpanded = expandedGroups.has(baseName);
+                                                const displayItems = isGroup && isExpanded ? items : [items[0]];
+
+                                                return (
+                                                    <React.Fragment key={baseName}>
+                                                        {displayItems.map((asset, idx) => (
+                                                            <button
+                                                                key={asset}
+                                                                className={`aspect-square rounded overflow-hidden border transition-all group relative bg-zinc-950 ${selectedAsset === asset
+                                                                    ? 'border-gold-500 ring-1 ring-gold-500 shadow-lg shadow-gold-500/20'
+                                                                    : 'border-zinc-800 hover:border-gold-500/50'
+                                                                    }`}
+                                                                onClick={() => {
+                                                                    if (isGroup && idx === 0) {
+                                                                        if (onSelectGroup) {
+                                                                            onSelectGroup(items);
+                                                                        } else {
+                                                                            // Fallback to old toggle behavior if prop not provided
+                                                                            toggleGroup(baseName);
+                                                                        }
+                                                                    } else {
+                                                                        onSelectAsset(asset);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="w-full h-full p-1 flex items-center justify-center">
+                                                                    <img
+                                                                        src={asset}
+                                                                        alt={asset.split('/').pop()}
+                                                                        className="max-w-full max-h-full object-contain transition-transform group-hover:scale-110 duration-300"
+                                                                        loading="lazy"
+                                                                    />
+                                                                </div>
+                                                                {isGroup && idx === 0 && (
+                                                                    <div className="absolute bottom-0 right-0 bg-zinc-900/80 text-gold-400 text-[10px] px-1 rounded-tl border-t border-l border-zinc-800 font-mono">
+                                                                        {isExpanded ? '-' : `+${items.length - 1}`}
+                                                                    </div>
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 content-start">
-                                        {groupAssets.map((asset: string, index: number) => (
-                                            <button
-                                                key={index}
-                                                className={`aspect-square rounded overflow-hidden border transition-all group relative ${selectedAsset === asset
-                                                    ? 'border-gold-500 ring-1 ring-gold-500 shadow-lg shadow-gold-500/20'
-                                                    : 'border-zinc-800 hover:border-gold-500/50'
-                                                    }`}
-                                                onClick={() => onSelectAsset(asset)}
-                                            >
-                                                <img
-                                                    src={asset}
-                                                    alt={asset.split('/').pop()}
-                                                    className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-300"
-                                                    loading="lazy"
-                                                />
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </>
                 )}
