@@ -37,9 +37,21 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
             };
             img.src = initialData;
         } else if (ctx) {
-            // Initialize with white background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
+            // Initialize with water texture by default
+            const img = new Image();
+            img.src = '/assets/background/FantasyWorld/water/asset_14.jpg';
+            img.onload = () => {
+                const pattern = ctx.createPattern(img, 'repeat');
+                if (pattern) {
+                    ctx.fillStyle = pattern;
+                    ctx.fillRect(0, 0, width, height);
+                    // We need to update the layer to show the changes
+                    if (imageRef.current) {
+                        const layer = imageRef.current.getLayer();
+                        if (layer) layer.batchDraw();
+                    }
+                }
+            };
         }
     }, [width, height, initialData]);
 

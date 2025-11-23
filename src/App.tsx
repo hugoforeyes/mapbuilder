@@ -20,8 +20,8 @@ function App() {
   const [brushOpacity, setBrushOpacity] = useState(1);
   const [brushSoftness, setBrushSoftness] = useState(0.5);
   const [brushShape, setBrushShape] = useState<'circle' | 'rough'>('circle');
-  const [brushRoughness, setBrushRoughness] = useState(0.5);
-  const [brushSmooth, setBrushSmooth] = useState(false);
+  const [brushRoughness, setBrushRoughness] = useState(8);
+  const [brushSmooth, setBrushSmooth] = useState(true);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [selectedBrushGroup, setSelectedBrushGroup] = useState<string[] | null>(null);
   const [selectedItemGroup, setSelectedItemGroup] = useState<string[] | null>(null);
