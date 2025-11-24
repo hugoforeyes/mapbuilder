@@ -4,7 +4,7 @@ import Toolbar from './components/Toolbar';
 import RightPanel from './components/RightPanel';
 import TopBar from './components/TopBar';
 import ToolOptionsPanel from './components/ToolOptionsPanel';
-import type { MapItem, ToolType } from './types';
+import type { MapItem, ToolType, MaskSettings } from './types';
 
 function App() {
   const [selectedTool, setSelectedTool] = useState<ToolType>('select');
@@ -14,6 +14,18 @@ function App() {
   const [items, setItems] = useState<MapItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [canvasSize] = useState({ width: 2048, height: 1536 });
+
+  // Mask Effects State
+  const [maskEffectsEnabled, setMaskEffectsEnabled] = useState(false);
+  const [maskEffectsSettings, setMaskEffectsSettings] = useState<MaskSettings>({
+    stroke: { enabled: true, texture: null, width: 0.5, color: '#000000' },
+    outline: { enabled: false, color: '#000000', width: 1 },
+    shadows: {
+      outer: { enabled: true, color: '#000000', blur: 10 },
+      inner: { enabled: true, color: '#000000', blur: 10 }
+    },
+    ripples: { enabled: true, texture: null, width: 0.5, count: 3, gap: 1.5 }
+  });
 
   // New State for Reference Style UI
   const [brushSize, setBrushSize] = useState(100);
@@ -112,6 +124,10 @@ function App() {
           setItemPlacementMode={setItemPlacementMode}
           isRandomPlacement={isRandomPlacement}
           setIsRandomPlacement={setIsRandomPlacement}
+          maskEffectsEnabled={maskEffectsEnabled}
+          setMaskEffectsEnabled={setMaskEffectsEnabled}
+          maskEffectsSettings={maskEffectsSettings}
+          setMaskEffectsSettings={setMaskEffectsSettings}
         />
 
         <div className="flex-1 relative bg-zinc-950 overflow-hidden flex items-center justify-center">
@@ -139,6 +155,8 @@ function App() {
               isRandomPlacement={isRandomPlacement}
               selectedItemGroup={selectedItemGroup}
               onSelectAsset={setSelectedItemAsset}
+              maskEffectsEnabled={maskEffectsEnabled}
+              maskEffectsSettings={maskEffectsSettings}
             />
           </div>
         </div>

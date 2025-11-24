@@ -5,6 +5,7 @@ import type { MapItem, ToolType } from '../types';
 import Konva from 'konva';
 import type { TerrainLayerRef } from './TerrainLayer';
 import TerrainLayer from './TerrainLayer';
+import type { MaskSettings } from '../types';
 
 interface MapCanvasProps {
     width: number;
@@ -29,6 +30,8 @@ interface MapCanvasProps {
     isRandomPlacement?: boolean;
     selectedItemGroup?: string[] | null;
     onSelectAsset?: (asset: string) => void;
+    maskEffectsEnabled?: boolean;
+    maskEffectsSettings?: MaskSettings;
 }
 
 const URLImage = ({ src, ...props }: any) => {
@@ -112,6 +115,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     isRandomPlacement,
     selectedItemGroup,
     onSelectAsset,
+    maskEffectsEnabled,
+    maskEffectsSettings,
 }) => {
     const stageRef = useRef<Konva.Stage>(null);
     const trRef = useRef<Konva.Transformer>(null);
@@ -425,6 +430,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                         width={width}
                         height={height}
                         initialData={terrainData}
+                        maskEffectsEnabled={maskEffectsEnabled}
+                        maskEffectsSettings={maskEffectsSettings}
                     />
                 </Layer>
                 <Layer>

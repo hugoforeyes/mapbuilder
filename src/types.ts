@@ -28,3 +28,37 @@ export interface Asset {
     src: string;
     category: 'background' | 'items';
 }
+
+export interface MaskSettings {
+    stroke: {
+        enabled: boolean;
+        texture: string | null;
+        width: number;
+        color: string;
+    };
+    outline: {
+        enabled: boolean;
+        color: string;
+        width: number;
+    };
+    shadows: {
+        outer: {
+            enabled: boolean;
+            color: string;
+            blur: number;
+        };
+        inner: {
+            enabled: boolean;
+            color: string;
+            blur: number;
+        };
+    };
+    ripples: {
+        enabled: boolean;
+        texture: string | null;
+        width: number;
+        count: number;
+        gap: number;
+    };
+}
+// Force rebuild

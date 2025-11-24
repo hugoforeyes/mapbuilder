@@ -1,10 +1,14 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, memo } from 'react';
 import { Image as KonvaImage } from 'react-konva';
 
+import type { MaskSettings } from '../types';
+
 interface TerrainLayerProps {
     width: number;
     height: number;
     initialData?: string | null;
+    maskEffectsEnabled?: boolean;
+    maskEffectsSettings?: MaskSettings;
 }
 
 export interface TerrainLayerRef {
@@ -12,10 +16,11 @@ export interface TerrainLayerRef {
     getDataURL: () => string;
 }
 
-const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, height, initialData }, ref) => {
+const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, height, initialData, maskEffectsEnabled, maskEffectsSettings }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const foregroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const backgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const imageRef = useRef<any>(null);
 
     // Cache for loaded texture images to avoid reloading on every paint
@@ -30,6 +35,9 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
     }
     if (!backgroundCanvasRef.current) {
         backgroundCanvasRef.current = document.createElement('canvas');
+    }
+    if (!maskCanvasRef.current) {
+        maskCanvasRef.current = document.createElement('canvas');
     }
 
     const compose = () => {
@@ -47,29 +55,76 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
         // 1. Draw Background
         ctx.drawImage(backgroundCanvas, 0, 0);
 
-        // 2. Draw Foreground with Border Effects (Ripple)
-        // We draw from outer to inner
+        // 2. Draw Mask Effects (if enabled)
+        if (maskEffectsEnabled && maskEffectsSettings) {
+            // Create a unified mask from the foreground
+            // This ensures that overlapping strokes don't create internal "coastlines"
+            // We draw the foreground into a separate canvas to treat it as a single shape
+            const maskCanvas = maskCanvasRef.current;
+            if (maskCanvas) {
+                maskCanvas.width = width;
+                maskCanvas.height = height;
+                const maskCtx = maskCanvas.getContext('2d');
 
-        // Outer Ripple
-        ctx.save();
-        ctx.shadowColor = 'rgba(100, 200, 255, 0.4)';
-        ctx.shadowBlur = 20;
-        ctx.drawImage(foregroundCanvas, 0, 0);
-        ctx.restore();
+                if (maskCtx) {
+                    maskCtx.clearRect(0, 0, width, height);
+                    maskCtx.drawImage(foregroundCanvas, 0, 0);
 
-        // Middle Ripple
-        ctx.save();
-        ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
-        ctx.shadowBlur = 10;
-        ctx.drawImage(foregroundCanvas, 0, 0);
-        ctx.restore();
+                    // Optional: To make the mask more solid and avoid internal seams from soft brushes,
+                    // we could draw it multiple times or threshold it. 
+                    // For now, drawing the foreground as a single layer is the key step.
+                    // To ensure the "coastline" is truly unified, we can fill the shape with a solid color
+                    // preserving the alpha, so the shadow is cast by a solid block.
+                    maskCtx.globalCompositeOperation = 'source-in';
+                    maskCtx.fillStyle = '#000000';
+                    maskCtx.fillRect(0, 0, width, height);
+                    maskCtx.globalCompositeOperation = 'source-over';
 
-        // Inner Ripple / Glow
-        ctx.save();
-        ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
-        ctx.shadowBlur = 5;
-        ctx.drawImage(foregroundCanvas, 0, 0);
-        ctx.restore();
+                    // Helper to draw shadow/glow using the MASK
+                    const drawEffect = (color: string, blur: number, opacity: number = 1) => {
+                        ctx.save();
+                        ctx.shadowColor = color;
+                        ctx.shadowBlur = blur;
+                        ctx.shadowOffsetX = 10000; // Move shadow on screen
+                        ctx.globalAlpha = opacity;
+                        // Draw MASK off-screen so only the shadow is visible in the viewport
+                        ctx.drawImage(maskCanvas, -10000, 0);
+                        ctx.restore();
+                    };
+
+                    // Ripples
+                    if (maskEffectsSettings.ripples.enabled) {
+                        const { count, width: rippleWidth, gap } = maskEffectsSettings.ripples;
+                        const rippleColor = 'rgba(100, 200, 255, 0.5)';
+
+                        for (let i = count; i > 0; i--) {
+                            const blur = (i * gap) + rippleWidth;
+                            drawEffect(rippleColor, blur, 1 - (i / count) * 0.5);
+                        }
+                    }
+
+                    // Outer Shadows
+                    if (maskEffectsSettings.shadows.outer.enabled) {
+                        const { color, blur } = maskEffectsSettings.shadows.outer;
+                        drawEffect(color, blur);
+                    }
+
+                    // Outline
+                    if (maskEffectsSettings.outline.enabled) {
+                        const { color, width: outlineWidth } = maskEffectsSettings.outline;
+                        drawEffect(color, outlineWidth, 1);
+                        drawEffect(color, outlineWidth / 2, 1);
+                    }
+
+                    // Stroke
+                    if (maskEffectsSettings.stroke.enabled) {
+                        const { color, width: strokeWidth } = maskEffectsSettings.stroke;
+                        drawEffect(color, strokeWidth, 1);
+                        drawEffect(color, 2, 1); // Hard edge
+                    }
+                }
+            }
+        }
 
         // 3. Draw Foreground on top
         ctx.drawImage(foregroundCanvas, 0, 0);
@@ -97,7 +152,6 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
             backgroundCanvas.height = height;
         }
 
-        const ctx = canvas.getContext('2d');
         const bgCtx = backgroundCanvas.getContext('2d');
 
         if (bgCtx) {
@@ -128,6 +182,11 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
             }
         }
     }, [width, height, initialData]);
+
+    // Re-compose when mask effects settings change
+    useEffect(() => {
+        compose();
+    }, [maskEffectsEnabled, maskEffectsSettings]);
 
     // Helper to create procedural patterns
     const createBrushPattern = (type: string, color: string, ctx: CanvasRenderingContext2D) => {
@@ -193,6 +252,8 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
 
             const paintWithPattern = (pattern: CanvasPattern | null) => {
                 if (!pattern) return;
+
+                ctx.save();
 
                 const tipCanvas = document.createElement('canvas');
                 tipCanvas.width = brushSize * 2;
@@ -306,7 +367,20 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
             }
         },
         getDataURL: () => {
-            return canvasRef.current?.toDataURL() || '';
+            // Return a clean composite of background and foreground, ignoring mask effects
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const ctx = tempCanvas.getContext('2d');
+            if (ctx) {
+                if (backgroundCanvasRef.current) {
+                    ctx.drawImage(backgroundCanvasRef.current, 0, 0);
+                }
+                if (foregroundCanvasRef.current) {
+                    ctx.drawImage(foregroundCanvasRef.current, 0, 0);
+                }
+            }
+            return tempCanvas.toDataURL();
         }
     }));
 
