@@ -188,6 +188,9 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         if (selectedTool === 'brush' && selectedAsset) {
             isPainting.current = true;
+            if (terrainLayerRef.current) {
+                terrainLayerRef.current.setInteractive(true);
+            }
             const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
                 terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, selectedLayer, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
@@ -341,6 +344,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         if (isPainting.current) {
             isPainting.current = false;
             if (terrainLayerRef.current) {
+                terrainLayerRef.current.setInteractive(false);
                 onUpdateTerrain(terrainLayerRef.current.getDataURL());
             }
             lastPaintPos.current = null;

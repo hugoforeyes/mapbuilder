@@ -14,6 +14,7 @@ interface TerrainLayerProps {
 export interface TerrainLayerRef {
     paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean) => void;
     getDataURL: () => string;
+    setInteractive: (interactive: boolean) => void;
 }
 
 const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, height, initialData, maskEffectsEnabled, maskEffectsSettings }, ref) => {
@@ -22,6 +23,8 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
     const backgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const imageRef = useRef<any>(null);
+    const isInteractiveRef = useRef(false);
+    const animationFrameRef = useRef<number | null>(null);
 
     // Cache for loaded texture images to avoid reloading on every paint
     const textureCache = useRef<{ [key: string]: HTMLImageElement }>({});
@@ -57,9 +60,6 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
 
         // 2. Draw Mask Effects (if enabled)
         if (maskEffectsEnabled && maskEffectsSettings) {
-            // Create a unified mask from the foreground
-            // This ensures that overlapping strokes don't create internal "coastlines"
-            // We draw the foreground into a separate canvas to treat it as a single shape
             const maskCanvas = maskCanvasRef.current;
             if (maskCanvas) {
                 maskCanvas.width = width;
@@ -70,11 +70,6 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                     maskCtx.clearRect(0, 0, width, height);
                     maskCtx.drawImage(foregroundCanvas, 0, 0);
 
-                    // Optional: To make the mask more solid and avoid internal seams from soft brushes,
-                    // we could draw it multiple times or threshold it. 
-                    // For now, drawing the foreground as a single layer is the key step.
-                    // To ensure the "coastline" is truly unified, we can fill the shape with a solid color
-                    // preserving the alpha, so the shadow is cast by a solid block.
                     maskCtx.globalCompositeOperation = 'source-in';
                     maskCtx.fillStyle = '#000000';
                     maskCtx.fillRect(0, 0, width, height);
@@ -92,35 +87,63 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                         ctx.restore();
                     };
 
-                    // Ripples
-                    if (maskEffectsSettings.ripples.enabled) {
-                        const { count, width: rippleWidth, gap } = maskEffectsSettings.ripples;
-                        const rippleColor = 'rgba(100, 200, 255, 0.5)';
+                    // OPTIMIZATION: If interactive (painting), skip expensive effects
+                    if (isInteractiveRef.current) {
+                        // Simplified rendering during interaction
+                        // 1. Skip Ripples entirely
 
-                        for (let i = count; i > 0; i--) {
-                            const blur = (i * gap) + rippleWidth;
-                            drawEffect(rippleColor, blur, 1 - (i / count) * 0.5);
+                        // 2. Simplified Outer Shadow (single pass)
+                        if (maskEffectsSettings.shadows.outer.enabled) {
+                            const { color, blur } = maskEffectsSettings.shadows.outer;
+                            // Use a smaller blur or single pass for performance
+                            drawEffect(color, blur, 0.8);
                         }
-                    }
 
-                    // Outer Shadows
-                    if (maskEffectsSettings.shadows.outer.enabled) {
-                        const { color, blur } = maskEffectsSettings.shadows.outer;
-                        drawEffect(color, blur);
-                    }
+                        // 3. Simplified Outline (single pass)
+                        if (maskEffectsSettings.outline.enabled) {
+                            const { color, width: outlineWidth } = maskEffectsSettings.outline;
+                            drawEffect(color, outlineWidth, 1);
+                        }
 
-                    // Outline
-                    if (maskEffectsSettings.outline.enabled) {
-                        const { color, width: outlineWidth } = maskEffectsSettings.outline;
-                        drawEffect(color, outlineWidth, 1);
-                        drawEffect(color, outlineWidth / 2, 1);
-                    }
+                        // 4. Stroke (keep as is, usually cheap enough, or simplify)
+                        if (maskEffectsSettings.stroke.enabled) {
+                            const { color, width: strokeWidth } = maskEffectsSettings.stroke;
+                            drawEffect(color, strokeWidth, 1);
+                        }
 
-                    // Stroke
-                    if (maskEffectsSettings.stroke.enabled) {
-                        const { color, width: strokeWidth } = maskEffectsSettings.stroke;
-                        drawEffect(color, strokeWidth, 1);
-                        drawEffect(color, 2, 1); // Hard edge
+                    } else {
+                        // Full Quality Rendering
+
+                        // Ripples
+                        if (maskEffectsSettings.ripples.enabled) {
+                            const { count, width: rippleWidth, gap } = maskEffectsSettings.ripples;
+                            const rippleColor = 'rgba(100, 200, 255, 0.5)';
+
+                            for (let i = count; i > 0; i--) {
+                                const blur = (i * gap) + rippleWidth;
+                                drawEffect(rippleColor, blur, 1 - (i / count) * 0.5);
+                            }
+                        }
+
+                        // Outer Shadows
+                        if (maskEffectsSettings.shadows.outer.enabled) {
+                            const { color, blur } = maskEffectsSettings.shadows.outer;
+                            drawEffect(color, blur);
+                        }
+
+                        // Outline
+                        if (maskEffectsSettings.outline.enabled) {
+                            const { color, width: outlineWidth } = maskEffectsSettings.outline;
+                            drawEffect(color, outlineWidth, 1);
+                            drawEffect(color, outlineWidth / 2, 1);
+                        }
+
+                        // Stroke
+                        if (maskEffectsSettings.stroke.enabled) {
+                            const { color, width: strokeWidth } = maskEffectsSettings.stroke;
+                            drawEffect(color, strokeWidth, 1);
+                            drawEffect(color, 2, 1); // Hard edge
+                        }
                     }
                 }
             }
@@ -134,6 +157,13 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
             const layer = imageRef.current.getLayer();
             if (layer) layer.batchDraw();
         }
+    };
+
+    const scheduleCompose = () => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+        animationFrameRef.current = requestAnimationFrame(compose);
     };
 
     useEffect(() => {
@@ -164,7 +194,7 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                 const img = new Image();
                 img.onload = () => {
                     bgCtx.drawImage(img, 0, 0);
-                    compose();
+                    scheduleCompose();
                 };
                 img.src = initialData;
             } else {
@@ -176,7 +206,7 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                     if (pattern) {
                         bgCtx.fillStyle = pattern;
                         bgCtx.fillRect(0, 0, width, height);
-                        compose();
+                        scheduleCompose();
                     }
                 };
             }
@@ -185,7 +215,7 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
 
     // Re-compose when mask effects settings change
     useEffect(() => {
-        compose();
+        scheduleCompose();
     }, [maskEffectsEnabled, maskEffectsSettings]);
 
     // Helper to create procedural patterns
@@ -342,7 +372,7 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                 ctx.restore();
 
                 // Re-compose the layers
-                compose();
+                scheduleCompose();
             };
 
             // Check if textureSrc is a procedural type
@@ -381,6 +411,13 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                 }
             }
             return tempCanvas.toDataURL();
+        },
+        setInteractive: (interactive: boolean) => {
+            isInteractiveRef.current = interactive;
+            // If we just finished interacting, trigger a full compose to restore high-quality effects
+            if (!interactive) {
+                scheduleCompose();
+            }
         }
     }));
 
