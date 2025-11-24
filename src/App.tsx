@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import MapCanvas from './components/MapCanvas';
 import Toolbar from './components/Toolbar';
-import RightPanel from './components/RightPanel';
 import TopBar from './components/TopBar';
 import ToolOptionsPanel from './components/ToolOptionsPanel';
+import CatalogOverlay from './components/CatalogOverlay';
 import type { MapItem, ToolType, MaskSettings } from './types';
 
 function App() {
@@ -59,8 +59,36 @@ function App() {
   };
 
   const handleDeleteItem = (id: string) => {
-    setItems(prev => prev.filter(i => i.id !== id));
+    setItems((prev) => prev.filter((item) => item.id !== id));
     if (selectedItemId === id) setSelectedItemId(null);
+  };
+
+  const handleAssetSelection = (asset: string, { closeCatalog = false } = {}) => {
+    if (selectedTool === 'brush') {
+      setSelectedBrushTexture(asset);
+      setSelectedBrushGroup(null);
+    } else {
+      setSelectedItemAsset(asset);
+      setSelectedItemGroup(null);
+    }
+
+    if (closeCatalog) {
+      setIsCatalogOpen(false);
+    }
+  };
+
+  const handleGroupSelection = (group: string[]) => {
+    if (selectedTool === 'brush') {
+      setSelectedBrushGroup(group);
+      setSelectedBrushTexture(group[0]);
+    } else {
+      setSelectedItemGroup(group);
+      setSelectedItemAsset(group[0]);
+      setIsRandomPlacement(true);
+      setItemPlacementMode('multiple');
+    }
+
+    setIsCatalogOpen(false);
   };
 
   const handleClearMap = () => {
@@ -112,13 +140,7 @@ function App() {
           selectedLayer={selectedLayer}
           setSelectedLayer={setSelectedLayer}
           selectedGroup={selectedTool === 'brush' ? selectedBrushGroup : selectedItemGroup}
-          onSelectAsset={(asset) => {
-            if (selectedTool === 'brush') {
-              setSelectedBrushTexture(asset);
-            } else {
-              setSelectedItemAsset(asset);
-            }
-          }}
+          onSelectAsset={handleAssetSelection}
           onClose={() => setSelectedTool('select')}
           itemPlacementMode={itemPlacementMode}
           setItemPlacementMode={setItemPlacementMode}
@@ -154,62 +176,25 @@ function App() {
               itemPlacementMode={itemPlacementMode}
               isRandomPlacement={isRandomPlacement}
               selectedItemGroup={selectedItemGroup}
-              onSelectAsset={setSelectedItemAsset}
+              onSelectAsset={handleAssetSelection}
               maskEffectsEnabled={maskEffectsEnabled}
               maskEffectsSettings={maskEffectsSettings}
             />
           </div>
         </div>
 
-        {/* Catalog / Right Panel Overlay */}
-        {isCatalogOpen && (
-          <div className="absolute inset-0 z-50 bg-black/50 flex justify-end">
-            <div className="w-96 h-full bg-zinc-900 shadow-2xl flex flex-col border-l border-zinc-700">
-              <div className="flex justify-between items-center p-3 border-b border-zinc-700">
-                <h2 className="font-semibold text-zinc-200">Asset Catalog</h2>
-                <button onClick={() => setIsCatalogOpen(false)} className="text-zinc-400 hover:text-white">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <RightPanel
-                  selectedTool={selectedTool}
-                  onSelectAsset={(asset) => {
-                    if (selectedTool === 'brush') {
-                      setSelectedBrushTexture(asset);
-                      setSelectedBrushGroup(null);
-                    } else if (selectedTool === 'item') {
-                      setSelectedItemAsset(asset);
-                      setSelectedItemGroup(null);
-                    }
-                    setIsCatalogOpen(false);
-                  }}
-                  // @ts-ignore
-                  onSelectGroup={(group) => {
-                    // Also select the first item by default if none selected
-                    if (selectedTool === 'brush') {
-                      setSelectedBrushGroup(group);
-                      setSelectedBrushTexture(group[0]);
-                    } else {
-                      setSelectedItemGroup(group);
-                      setSelectedItemAsset(group[0]);
-                      setIsRandomPlacement(true);
-                      setItemPlacementMode('multiple');
-                    }
-                    setIsCatalogOpen(false);
-                  }}
-                  selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
-                  items={items}
-                  onSelectItem={setSelectedItemId}
-                  selectedItemId={selectedItemId}
-                  onDeleteItem={handleDeleteItem}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        <CatalogOverlay
+          isOpen={isCatalogOpen}
+          onClose={() => setIsCatalogOpen(false)}
+          selectedTool={selectedTool}
+          selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
+          onSelectAsset={(asset) => handleAssetSelection(asset, { closeCatalog: true })}
+          onSelectGroup={handleGroupSelection}
+          items={items}
+          onSelectItem={setSelectedItemId}
+          selectedItemId={selectedItemId}
+          onDeleteItem={handleDeleteItem}
+        />
       </div>
     </div>
   );
