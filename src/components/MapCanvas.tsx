@@ -184,11 +184,22 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         });
     };
 
+    const subtractTexture = '/assets/background/FantasyWorld/water/asset_14.jpg';
+
+    const getEffectiveAsset = () => {
+        if (selectedTool === 'mask' && maskAction === 'subtract') {
+            return subtractTexture;
+        }
+        return selectedAsset;
+    };
+
     const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
         const stage = e.target.getStage();
         if (!stage) return;
 
-        if ((selectedTool === 'brush' || selectedTool === 'mask') && selectedAsset) {
+        const effectiveAsset = getEffectiveAsset();
+
+        if ((selectedTool === 'brush' || selectedTool === 'mask') && effectiveAsset) {
             isPainting.current = true;
             if (terrainLayerRef.current) {
                 terrainLayerRef.current.setInteractive(true);
@@ -196,7 +207,11 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
             const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
                 const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
-                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
+                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, effectiveAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
+                if (selectedTool === 'mask' && maskAction === 'subtract') {
+                    const backgroundBrushSize = brushSize * 2;
+                    terrainLayerRef.current.paint(pos.x, pos.y, backgroundBrushSize, subtractTexture, 'background', 1, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, false);
+                }
                 lastPaintPos.current = pos;
             }
         } else if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'multiple') {
@@ -237,7 +252,9 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         if (!isPainting.current) return;
 
-        if ((selectedTool === 'brush' || selectedTool === 'mask') && selectedAsset) {
+        const effectiveAsset = getEffectiveAsset();
+
+        if ((selectedTool === 'brush' || selectedTool === 'mask') && effectiveAsset) {
             const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
                 // Calculate distance from last paint position
@@ -253,13 +270,21 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
                     if (distance >= spacing) {
                         const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
-                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
+                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, effectiveAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
+                        if (selectedTool === 'mask' && maskAction === 'subtract') {
+                            const backgroundBrushSize = brushSize * 2;
+                            terrainLayerRef.current.paint(pos.x, pos.y, backgroundBrushSize, subtractTexture, 'background', 1, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, false);
+                        }
                         lastPaintPos.current = pos;
                     }
                 } else {
                     // First paint (should have been handled by mousedown but just in case)
                     const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
-                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
+                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, effectiveAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
+                    if (selectedTool === 'mask' && maskAction === 'subtract') {
+                        const backgroundBrushSize = brushSize * 2;
+                        terrainLayerRef.current.paint(pos.x, pos.y, backgroundBrushSize, subtractTexture, 'background', 1, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, false);
+                    }
                     lastPaintPos.current = pos;
                 }
             }
@@ -500,7 +525,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                             x={cursorPos.x}
                             y={cursorPos.y}
                             radius={brushSize / 2}
-                            src={selectedAsset}
+                            src={selectedTool === 'mask' && maskAction === 'subtract' ? subtractTexture : selectedAsset}
                         />
                     )}
                     {selectedTool === 'item' && cursorPos && selectedAsset && (
