@@ -12,7 +12,7 @@ interface TerrainLayerProps {
 }
 
 export interface TerrainLayerRef {
-    paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean) => void;
+    paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean, isMaskStroke?: boolean) => void;
     getDataURL: () => string;
     setInteractive: (interactive: boolean) => void;
 }
@@ -47,6 +47,7 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
         const canvas = canvasRef.current;
         const foregroundCanvas = foregroundCanvasRef.current;
         const backgroundCanvas = backgroundCanvasRef.current;
+        const maskCanvas = maskCanvasRef.current;
         if (!canvas || !foregroundCanvas || !backgroundCanvas) return;
 
         const ctx = canvas.getContext('2d');
@@ -59,91 +60,89 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
         ctx.drawImage(backgroundCanvas, 0, 0);
 
         // 2. Draw Mask Effects (if enabled)
-        if (maskEffectsEnabled && maskEffectsSettings) {
-            const maskCanvas = maskCanvasRef.current;
-            if (maskCanvas) {
-                maskCanvas.width = width;
-                maskCanvas.height = height;
-                const maskCtx = maskCanvas.getContext('2d');
+        if (maskEffectsEnabled && maskEffectsSettings && maskCanvas) {
+            const maskEffectCanvas = document.createElement('canvas');
+            maskEffectCanvas.width = width;
+            maskEffectCanvas.height = height;
+            const maskCtx = maskEffectCanvas.getContext('2d');
 
-                if (maskCtx) {
-                    maskCtx.clearRect(0, 0, width, height);
-                    maskCtx.drawImage(foregroundCanvas, 0, 0);
+            if (maskCtx) {
+                maskCtx.clearRect(0, 0, width, height);
+                maskCtx.drawImage(maskCanvas, 0, 0);
 
-                    maskCtx.globalCompositeOperation = 'source-in';
-                    maskCtx.fillStyle = '#000000';
-                    maskCtx.fillRect(0, 0, width, height);
-                    maskCtx.globalCompositeOperation = 'source-over';
+                maskCtx.globalCompositeOperation = 'source-in';
+                maskCtx.fillStyle = '#000000';
+                maskCtx.fillRect(0, 0, width, height);
+                maskCtx.globalCompositeOperation = 'source-over';
 
-                    // Helper to draw shadow/glow using the MASK
-                    const drawEffect = (color: string, blur: number, opacity: number = 1) => {
-                        ctx.save();
-                        ctx.shadowColor = color;
-                        ctx.shadowBlur = blur;
-                        ctx.shadowOffsetX = 10000; // Move shadow on screen
-                        ctx.globalAlpha = opacity;
-                        // Draw MASK off-screen so only the shadow is visible in the viewport
-                        ctx.drawImage(maskCanvas, -10000, 0);
-                        ctx.restore();
-                    };
+                // Helper to draw shadow/glow using the MASK
+                const drawEffect = (color: string, blur: number, opacity: number = 1) => {
+                    ctx.save();
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = blur;
+                    ctx.shadowOffsetX = 10000; // Move shadow on screen
+                    ctx.globalAlpha = opacity;
+                    // Draw MASK off-screen so only the shadow is visible in the viewport
+                    ctx.drawImage(maskEffectCanvas, -10000, 0);
+                    ctx.restore();
+                };
 
-                    // OPTIMIZATION: If interactive (painting), skip expensive effects
-                    if (isInteractiveRef.current) {
-                        // Simplified rendering during interaction
-                        // 1. Skip Ripples entirely
+                // OPTIMIZATION: If interactive (painting), skip expensive effects
+                if (isInteractiveRef.current) {
+                    // Simplified rendering during interaction
+                    // 1. Skip Ripples entirely
 
-                        // 2. Simplified Outer Shadow (single pass)
-                        if (maskEffectsSettings.shadows.outer.enabled) {
-                            const { color, blur } = maskEffectsSettings.shadows.outer;
-                            // Use a smaller blur or single pass for performance
-                            drawEffect(color, blur, 0.8);
+                    // 2. Simplified Outer Shadow (single pass)
+                    if (maskEffectsSettings.shadows.outer.enabled) {
+                        const { color, blur } = maskEffectsSettings.shadows.outer;
+                        // Use a smaller blur or single pass for performance
+                        drawEffect(color, blur, 0.8);
+                    }
+
+                    // 3. Simplified Outline (single pass)
+                    if (maskEffectsSettings.outline.enabled) {
+                        const { color, width: outlineWidth } = maskEffectsSettings.outline;
+                        drawEffect(color, outlineWidth, 1);
+                    }
+
+                    // 4. Stroke (keep as is, usually cheap enough, or simplify)
+                    if (maskEffectsSettings.stroke.enabled) {
+                        const { color, width: strokeWidth } = maskEffectsSettings.stroke;
+                        drawEffect(color, strokeWidth, 1);
+                    }
+
+                } else {
+                    // Full Quality Rendering
+
+                    // Ripples
+                    if (maskEffectsSettings.ripples.enabled) {
+                        const { count, width: rippleWidth, gap } = maskEffectsSettings.ripples;
+                        const rippleColor = 'rgba(100, 200, 255, 0.5)';
+
+                        for (let i = count; i > 0; i--) {
+                            const blur = (i * gap) + rippleWidth;
+                            drawEffect(rippleColor, blur, 1 - (i / count) * 0.5);
                         }
+                    }
 
-                        // 3. Simplified Outline (single pass)
-                        if (maskEffectsSettings.outline.enabled) {
-                            const { color, width: outlineWidth } = maskEffectsSettings.outline;
-                            drawEffect(color, outlineWidth, 1);
-                        }
+                    // Outer Shadows
+                    if (maskEffectsSettings.shadows.outer.enabled) {
+                        const { color, blur } = maskEffectsSettings.shadows.outer;
+                        drawEffect(color, blur);
+                    }
 
-                        // 4. Stroke (keep as is, usually cheap enough, or simplify)
-                        if (maskEffectsSettings.stroke.enabled) {
-                            const { color, width: strokeWidth } = maskEffectsSettings.stroke;
-                            drawEffect(color, strokeWidth, 1);
-                        }
+                    // Outline
+                    if (maskEffectsSettings.outline.enabled) {
+                        const { color, width: outlineWidth } = maskEffectsSettings.outline;
+                        drawEffect(color, outlineWidth, 1);
+                        drawEffect(color, outlineWidth / 2, 1);
+                    }
 
-                    } else {
-                        // Full Quality Rendering
-
-                        // Ripples
-                        if (maskEffectsSettings.ripples.enabled) {
-                            const { count, width: rippleWidth, gap } = maskEffectsSettings.ripples;
-                            const rippleColor = 'rgba(100, 200, 255, 0.5)';
-
-                            for (let i = count; i > 0; i--) {
-                                const blur = (i * gap) + rippleWidth;
-                                drawEffect(rippleColor, blur, 1 - (i / count) * 0.5);
-                            }
-                        }
-
-                        // Outer Shadows
-                        if (maskEffectsSettings.shadows.outer.enabled) {
-                            const { color, blur } = maskEffectsSettings.shadows.outer;
-                            drawEffect(color, blur);
-                        }
-
-                        // Outline
-                        if (maskEffectsSettings.outline.enabled) {
-                            const { color, width: outlineWidth } = maskEffectsSettings.outline;
-                            drawEffect(color, outlineWidth, 1);
-                            drawEffect(color, outlineWidth / 2, 1);
-                        }
-
-                        // Stroke
-                        if (maskEffectsSettings.stroke.enabled) {
-                            const { color, width: strokeWidth } = maskEffectsSettings.stroke;
-                            drawEffect(color, strokeWidth, 1);
-                            drawEffect(color, 2, 1); // Hard edge
-                        }
+                    // Stroke
+                    if (maskEffectsSettings.stroke.enabled) {
+                        const { color, width: strokeWidth } = maskEffectsSettings.stroke;
+                        drawEffect(color, strokeWidth, 1);
+                        drawEffect(color, 2, 1); // Hard edge
                     }
                 }
             }
@@ -170,16 +169,19 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
         const canvas = canvasRef.current!;
         const foregroundCanvas = foregroundCanvasRef.current!;
         const backgroundCanvas = backgroundCanvasRef.current!;
+        const maskCanvas = maskCanvasRef.current!;
 
         if (canvas.width !== width) {
             canvas.width = width;
             foregroundCanvas.width = width;
             backgroundCanvas.width = width;
+            maskCanvas.width = width;
         }
         if (canvas.height !== height) {
             canvas.height = height;
             foregroundCanvas.height = height;
             backgroundCanvas.height = height;
+            maskCanvas.height = height;
         }
 
         const bgCtx = backgroundCanvas.getContext('2d');
@@ -274,8 +276,9 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
     };
 
     useImperativeHandle(ref, () => ({
-        paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity = 1, softness = 0.5, color = '#000000', shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false) => {
+        paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity = 1, softness = 0.5, color = '#000000', shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false, isMaskStroke = false) => {
             const targetCanvas = layer === 'foreground' ? foregroundCanvasRef.current : backgroundCanvasRef.current;
+            const maskCanvas = maskCanvasRef.current;
             if (!targetCanvas) return;
             const ctx = targetCanvas.getContext('2d');
             if (!ctx) return;
@@ -365,8 +368,53 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                         tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
                     }
 
+                    let tipToDraw: HTMLCanvasElement | null = tipCanvas;
+
+                    // Restrict foreground painting to masked area (unless we are painting the mask itself)
+                    if (layer === 'foreground' && !isMaskStroke) {
+                        if (!maskCanvas) {
+                            ctx.restore();
+                            return;
+                        }
+
+                        const maskedTipCanvas = document.createElement('canvas');
+                        maskedTipCanvas.width = tipCanvas.width;
+                        maskedTipCanvas.height = tipCanvas.height;
+                        const maskedTipCtx = maskedTipCanvas.getContext('2d');
+
+                        if (!maskedTipCtx) {
+                            ctx.restore();
+                            return;
+                        }
+
+                        maskedTipCtx.drawImage(
+                            maskCanvas,
+                            x - brushSize,
+                            y - brushSize,
+                            brushSize * 2,
+                            brushSize * 2,
+                            0,
+                            0,
+                            brushSize * 2,
+                            brushSize * 2
+                        );
+                        maskedTipCtx.globalCompositeOperation = 'source-in';
+                        maskedTipCtx.drawImage(tipCanvas, 0, 0);
+                        tipToDraw = maskedTipCanvas;
+                    }
+
+                    // Record mask coverage for mask strokes
+                    if (isMaskStroke && maskCanvas) {
+                        const maskCtx = maskCanvas.getContext('2d');
+                        if (maskCtx) {
+                            maskCtx.drawImage(tipCanvas, x - brushSize, y - brushSize);
+                        }
+                    }
+
                     // Draw tip onto target canvas
-                    ctx.drawImage(tipCanvas, x - brushSize, y - brushSize);
+                    if (tipToDraw) {
+                        ctx.drawImage(tipToDraw, x - brushSize, y - brushSize);
+                    }
                 }
 
                 ctx.restore();
