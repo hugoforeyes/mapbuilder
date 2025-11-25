@@ -12,7 +12,7 @@ interface TerrainLayerProps {
 }
 
 export interface TerrainLayerRef {
-    paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean, isMaskStroke?: boolean) => void;
+    paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean, isMaskStroke?: boolean, maskMode?: 'add' | 'subtract') => void;
     getDataURL: () => string;
     setInteractive: (interactive: boolean) => void;
 }
@@ -276,7 +276,7 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
     };
 
     useImperativeHandle(ref, () => ({
-        paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity = 1, softness = 0.5, color = '#000000', shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false, isMaskStroke = false) => {
+        paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity = 1, softness = 0.5, color = '#000000', shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false, isMaskStroke = false, maskMode: 'add' | 'subtract' = 'add') => {
             const targetCanvas = layer === 'foreground' ? foregroundCanvasRef.current : backgroundCanvasRef.current;
             const maskCanvas = maskCanvasRef.current;
             if (!targetCanvas) return;
@@ -407,13 +407,21 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                     if (isMaskStroke && maskCanvas) {
                         const maskCtx = maskCanvas.getContext('2d');
                         if (maskCtx) {
+                            const prevComposite = maskCtx.globalCompositeOperation;
+                            maskCtx.globalCompositeOperation = maskMode === 'subtract' ? 'destination-out' : 'source-over';
                             maskCtx.drawImage(tipCanvas, x - brushSize, y - brushSize);
+                            maskCtx.globalCompositeOperation = prevComposite;
                         }
                     }
 
                     // Draw tip onto target canvas
                     if (tipToDraw) {
+                        const prevComposite = ctx.globalCompositeOperation;
+                        if (isMaskStroke && layer === 'foreground') {
+                            ctx.globalCompositeOperation = maskMode === 'subtract' ? 'destination-out' : 'source-over';
+                        }
                         ctx.drawImage(tipToDraw, x - brushSize, y - brushSize);
+                        ctx.globalCompositeOperation = prevComposite;
                     }
                 }
 

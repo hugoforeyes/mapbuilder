@@ -40,6 +40,7 @@ function App() {
   const [selectedItemGroup, setSelectedItemGroup] = useState<string[] | null>(null);
   const [itemPlacementMode, setItemPlacementMode] = useState<'single' | 'multiple'>('single');
   const [isRandomPlacement, setIsRandomPlacement] = useState(true);
+  const [maskAction, setMaskAction] = useState<'add' | 'subtract'>('add');
 
   // Removed auto-resize logic to keep fixed default size
 
@@ -128,6 +129,8 @@ function App() {
           setMaskEffectsEnabled={setMaskEffectsEnabled}
           maskEffectsSettings={maskEffectsSettings}
           setMaskEffectsSettings={setMaskEffectsSettings}
+          maskAction={maskAction}
+          setMaskAction={setMaskAction}
         />
 
         <div className="flex-1 relative bg-zinc-950 overflow-hidden flex items-center justify-center">
@@ -157,6 +160,7 @@ function App() {
               onSelectAsset={setSelectedItemAsset}
               maskEffectsEnabled={maskEffectsEnabled}
               maskEffectsSettings={maskEffectsSettings}
+              maskAction={maskAction}
             />
           </div>
         </div>
