@@ -21,7 +21,7 @@ export interface BackgroundTile {
     height: number;
 }
 
-export type ToolType = 'brush' | 'item' | 'select' | 'hand';
+export type ToolType = 'brush' | 'item' | 'select' | 'hand' | 'mask';
 
 export interface Asset {
     name: string;

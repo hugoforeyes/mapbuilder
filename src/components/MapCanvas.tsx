@@ -186,14 +186,15 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         const stage = e.target.getStage();
         if (!stage) return;
 
-        if (selectedTool === 'brush' && selectedAsset) {
+        if ((selectedTool === 'brush' || selectedTool === 'mask') && selectedAsset) {
             isPainting.current = true;
             if (terrainLayerRef.current) {
                 terrainLayerRef.current.setInteractive(true);
             }
             const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
-                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, selectedLayer, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
+                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
                 lastPaintPos.current = pos;
             }
         } else if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'multiple') {
@@ -223,7 +224,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         if (!stage) return;
 
         // Update cursor position for brush and item tools
-        if (selectedTool === 'brush' || (selectedTool === 'item' && selectedAsset)) {
+        if (selectedTool === 'brush' || selectedTool === 'mask' || (selectedTool === 'item' && selectedAsset)) {
             const pos = getWorldPointerPosition(stage);
             if (pos) {
                 setCursorPos(pos);
@@ -234,7 +235,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         if (!isPainting.current) return;
 
-        if (selectedTool === 'brush' && selectedAsset) {
+        if ((selectedTool === 'brush' || selectedTool === 'mask') && selectedAsset) {
             const pos = getWorldPointerPosition(stage);
             if (pos && terrainLayerRef.current) {
                 // Calculate distance from last paint position
@@ -249,12 +250,14 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                     const spacing = brushShape === 'rough' ? brushSize * 0.25 : brushSize * 0.1;
 
                     if (distance >= spacing) {
-                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, selectedLayer, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                        const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
+                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
                         lastPaintPos.current = pos;
                     }
                 } else {
                     // First paint (should have been handled by mousedown but just in case)
-                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, selectedLayer, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
+                    const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
+                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, selectedAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth);
                     lastPaintPos.current = pos;
                 }
             }
@@ -424,7 +427,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                 ref={stageRef}
                 className={
                     selectedTool === 'hand' ? 'cursor-grab active:cursor-grabbing' :
-                        selectedTool === 'brush' ? 'cursor-none' :
+                        selectedTool === 'brush' || selectedTool === 'mask' ? 'cursor-none' :
                             'cursor-crosshair'
                 }
             >
@@ -490,7 +493,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                 </Layer>
                 <Layer>
                     {/* Cursor Layer */}
-                    {selectedTool === 'brush' && cursorPos && (
+                    {(selectedTool === 'brush' || selectedTool === 'mask') && cursorPos && (
                         <BrushCursor
                             x={cursorPos.x}
                             y={cursorPos.y}

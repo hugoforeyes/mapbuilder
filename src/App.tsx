@@ -95,7 +95,7 @@ function App() {
 
         <ToolOptionsPanel
           selectedTool={selectedTool}
-          selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
+          selectedAsset={selectedTool === 'brush' || selectedTool === 'mask' ? selectedBrushTexture : selectedItemAsset}
           onOpenCatalog={() => setIsCatalogOpen(true)}
           brushSize={brushSize}
           setBrushSize={setBrushSize}
@@ -111,9 +111,9 @@ function App() {
           setBrushSmooth={setBrushSmooth}
           selectedLayer={selectedLayer}
           setSelectedLayer={setSelectedLayer}
-          selectedGroup={selectedTool === 'brush' ? selectedBrushGroup : selectedItemGroup}
+          selectedGroup={(selectedTool === 'brush' || selectedTool === 'mask') ? selectedBrushGroup : selectedItemGroup}
           onSelectAsset={(asset) => {
-            if (selectedTool === 'brush') {
+            if (selectedTool === 'brush' || selectedTool === 'mask') {
               setSelectedBrushTexture(asset);
             } else {
               setSelectedItemAsset(asset);
@@ -138,7 +138,7 @@ function App() {
               terrainData={terrainData}
               items={items}
               selectedTool={selectedTool}
-              selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
+              selectedAsset={(selectedTool === 'brush' || selectedTool === 'mask') ? selectedBrushTexture : selectedItemAsset}
               onUpdateTerrain={handleUpdateTerrain}
               brushSize={brushSize}
               onAddItem={handleAddItem}
@@ -177,7 +177,7 @@ function App() {
                 <RightPanel
                   selectedTool={selectedTool}
                   onSelectAsset={(asset) => {
-                    if (selectedTool === 'brush') {
+                    if (selectedTool === 'brush' || selectedTool === 'mask') {
                       setSelectedBrushTexture(asset);
                       setSelectedBrushGroup(null);
                     } else if (selectedTool === 'item') {
@@ -189,7 +189,7 @@ function App() {
                   // @ts-ignore
                   onSelectGroup={(group) => {
                     // Also select the first item by default if none selected
-                    if (selectedTool === 'brush') {
+                    if (selectedTool === 'brush' || selectedTool === 'mask') {
                       setSelectedBrushGroup(group);
                       setSelectedBrushTexture(group[0]);
                     } else {
@@ -200,7 +200,7 @@ function App() {
                     }
                     setIsCatalogOpen(false);
                   }}
-                  selectedAsset={selectedTool === 'brush' ? selectedBrushTexture : selectedItemAsset}
+                  selectedAsset={(selectedTool === 'brush' || selectedTool === 'mask') ? selectedBrushTexture : selectedItemAsset}
                   items={items}
                   onSelectItem={setSelectedItemId}
                   selectedItemId={selectedItemId}
