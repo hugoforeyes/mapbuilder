@@ -5,9 +5,11 @@ import RightPanel from './components/RightPanel';
 import TopBar from './components/TopBar';
 import ToolOptionsPanel from './components/ToolOptionsPanel';
 import type { MapItem, ToolType, MaskSettings } from './types';
+import { useEffect, useRef } from 'react';
 
 function App() {
   const [selectedTool, setSelectedTool] = useState<ToolType>('select');
+  const previousToolRef = useRef<ToolType>('select');
   const [selectedBrushTexture, setSelectedBrushTexture] = useState<string | null>('/assets/background/FantasyWorld/core/asset_7.jpg');
   const [selectedItemAsset, setSelectedItemAsset] = useState<string | null>(null);
   const [terrainData, setTerrainData] = useState<string | null>(null);
@@ -16,7 +18,7 @@ function App() {
   const [canvasSize] = useState({ width: 2048, height: 1536 });
 
   // Mask Effects State
-  const [maskEffectsEnabled, setMaskEffectsEnabled] = useState(false);
+  const [maskEffectsEnabled, setMaskEffectsEnabled] = useState(true);
   const [maskEffectsSettings, setMaskEffectsSettings] = useState<MaskSettings>({
     stroke: { enabled: true, texture: null, width: 0.5, color: '#000000' },
     outline: { enabled: false, color: '#000000', width: 1 },
@@ -31,7 +33,7 @@ function App() {
   const [brushSize, setBrushSize] = useState(100);
   const [brushOpacity, setBrushOpacity] = useState(1);
   const [brushSoftness, setBrushSoftness] = useState(0);
-  const [brushShape, setBrushShape] = useState<'circle' | 'rough'>('circle');
+  const [brushShape, setBrushShape] = useState<'circle' | 'rough'>('rough');
   const [brushRoughness, setBrushRoughness] = useState(8);
   const [brushSmooth, setBrushSmooth] = useState(true);
   const [selectedLayer, setSelectedLayer] = useState<'background' | 'foreground'>('foreground');
@@ -64,6 +66,39 @@ function App() {
     if (selectedItemId === id) setSelectedItemId(null);
   };
 
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || target.isContentEditable || tag === 'select';
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        if (selectedTool !== 'hand') {
+          previousToolRef.current = selectedTool;
+          setSelectedTool('hand');
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setSelectedTool(previousToolRef.current);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [selectedTool]);
+
   const handleClearMap = () => {
     if (window.confirm('Are you sure you want to clear the map?')) {
       setTerrainData(null);
@@ -84,9 +119,40 @@ function App() {
     a.click();
   };
 
+  const handleLoadMap = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      if (!target.files || target.files.length === 0) return;
+      const file = target.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result as string);
+          if (parsed) {
+            if (typeof parsed.terrainData === 'string' || parsed.terrainData === null) {
+              setTerrainData(parsed.terrainData || null);
+            }
+            if (Array.isArray(parsed.items)) {
+              setItems(parsed.items);
+            }
+            setSelectedItemId(null);
+          }
+        } catch (err) {
+          console.error('Failed to load map file', err);
+          alert('Could not load map. Please ensure the file is a valid map JSON.');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-300 overflow-hidden font-sans">
-      <TopBar onSaveMap={handleSaveMap} onClearMap={handleClearMap} />
+      <TopBar onSaveMap={handleSaveMap} onLoadMap={handleLoadMap} onClearMap={handleClearMap} />
 
       <div className="flex flex-1 overflow-hidden relative">
         <Toolbar

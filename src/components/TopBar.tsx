@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 
 interface TopBarProps {
     onSaveMap: () => void;
+    onLoadMap: () => void;
     onClearMap: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onSaveMap, onClearMap }) => {
+const TopBar: React.FC<TopBarProps> = ({ onSaveMap, onLoadMap, onClearMap }) => {
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +86,15 @@ const TopBar: React.FC<TopBarProps> = ({ onSaveMap, onClearMap }) => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                                 </svg>
                                 Save Map
+                            </button>
+                            <button
+                                className="text-left px-4 py-2 hover:bg-zinc-800 hover:text-gold-400 transition-colors flex items-center"
+                                onClick={() => { onLoadMap(); setActiveMenu(null); }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m0 0l-4-4m4 4l4-4M4 12h16" />
+                                </svg>
+                                Load Map
                             </button>
                             <div className="h-px bg-zinc-800 my-1"></div>
                             <button
