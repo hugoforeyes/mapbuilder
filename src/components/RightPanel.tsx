@@ -26,7 +26,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
     const [activeTab, setActiveTab] = useState<'assets' | 'layers'>('assets');
     const categories = Object.keys(assetsData);
     const [assetCategory, setAssetCategory] = useState<string>(
-        selectedTool === 'brush' ? 'background' : 'items'
+        (selectedTool === 'brush' || selectedTool === 'mask') ? 'background' : 'items'
     );
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -42,7 +42,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
     };
 
     useEffect(() => {
-        if (selectedTool === 'brush') {
+        if (selectedTool === 'brush' || selectedTool === 'mask') {
             setAssetCategory('background');
         } else if (selectedTool === 'item') {
             setAssetCategory('items');
@@ -89,7 +89,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                         <div className="p-3 border-b border-zinc-800 space-y-3 bg-zinc-900">
                             <div className="flex bg-zinc-950 rounded p-1 border border-zinc-800 overflow-x-auto no-scrollbar space-x-1">
                                 {categories.filter(cat => {
-                                    if (selectedTool === 'brush') return cat === 'background';
+                                    if (selectedTool === 'brush' || selectedTool === 'mask') return cat === 'background';
                                     if (selectedTool === 'item') return cat === 'items';
                                     return true;
                                 }).map((category) => (
@@ -133,8 +133,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                     const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
 
                                     let baseName = nameWithoutExt;
-                                    // Only group items if NOT using the brush tool
-                                    if (selectedTool !== 'brush') {
+                                    // Only group items if NOT using the brush or mask tool
+                                    if (selectedTool !== 'brush' && selectedTool !== 'mask') {
                                         const match = nameWithoutExt.match(/^(.*)_\d+$/);
                                         if (match) baseName = match[1];
                                     }

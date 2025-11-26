@@ -10,9 +10,10 @@ import { useEffect, useRef } from 'react';
 function App() {
   const [selectedTool, setSelectedTool] = useState<ToolType>('select');
   const previousToolRef = useRef<ToolType>('select');
-  const [selectedBrushTexture, setSelectedBrushTexture] = useState<string | null>('/assets/background/FantasyWorld/core/asset_7.jpg');
+  const [selectedBrushTexture, setSelectedBrushTexture] = useState<string | null>('/assets/background/FantasyWorld/core/asset_5.jpg');
   const [selectedItemAsset, setSelectedItemAsset] = useState<string | null>(null);
-  const [terrainData, setTerrainData] = useState<string | null>(null);
+  const [backgroundData, setBackgroundData] = useState<string | null>(null);
+  const [foregroundData, setForegroundData] = useState<string | null>(null);
   const [items, setItems] = useState<MapItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [canvasSize] = useState({ width: 2048, height: 1536 });
@@ -26,7 +27,7 @@ function App() {
       outer: { enabled: true, color: '#000000', blur: 10 },
       inner: { enabled: true, color: '#000000', blur: 10 }
     },
-    ripples: { enabled: true, texture: null, width: 0.5, count: 3, gap: 1.5 }
+    ripples: { enabled: true, texture: null, width: 1.2, count: 9, gap: 1.7 }
   });
 
   // New State for Reference Style UI
@@ -46,8 +47,9 @@ function App() {
 
   // Removed auto-resize logic to keep fixed default size
 
-  const handleUpdateTerrain = (data: string) => {
-    setTerrainData(data);
+  const handleUpdateTerrain = (data: { background: string | null, foreground: string | null }) => {
+    setBackgroundData(data.background);
+    setForegroundData(data.foreground);
   };
 
   const handleAddItem = (item: MapItem) => {
@@ -108,7 +110,8 @@ function App() {
 
   const handleSaveMap = () => {
     const mapData = {
-      terrainData,
+      backgroundData,
+      foregroundData,
       items,
     };
     const blob = new Blob([JSON.stringify(mapData)], { type: 'application/json' });
@@ -132,8 +135,14 @@ function App() {
         try {
           const parsed = JSON.parse(reader.result as string);
           if (parsed) {
-            if (typeof parsed.terrainData === 'string' || parsed.terrainData === null) {
-              setTerrainData(parsed.terrainData || null);
+            if (typeof parsed.backgroundData === 'string' || parsed.backgroundData === null) {
+              setBackgroundData(parsed.backgroundData || null);
+            } else if (typeof parsed.terrainData === 'string') {
+              // Legacy support: treat combined data as background if provided
+              setBackgroundData(parsed.terrainData);
+            }
+            if (typeof parsed.foregroundData === 'string' || parsed.foregroundData === null) {
+              setForegroundData(parsed.foregroundData || null);
             }
             if (Array.isArray(parsed.items)) {
               setItems(parsed.items);
@@ -204,7 +213,8 @@ function App() {
             <MapCanvas
               width={canvasSize.width}
               height={canvasSize.height}
-              terrainData={terrainData}
+              backgroundData={backgroundData}
+              foregroundData={foregroundData}
               items={items}
               selectedTool={selectedTool}
               selectedAsset={(selectedTool === 'brush' || selectedTool === 'mask') ? selectedBrushTexture : selectedItemAsset}

@@ -6,6 +6,9 @@ import type { MaskSettings } from '../types';
 interface TerrainLayerProps {
     width: number;
     height: number;
+    initialBackgroundData?: string | null;
+    initialForegroundData?: string | null;
+    // Legacy combined data support
     initialData?: string | null;
     maskEffectsEnabled?: boolean;
     maskEffectsSettings?: MaskSettings;
@@ -14,10 +17,11 @@ interface TerrainLayerProps {
 export interface TerrainLayerRef {
     paint: (x: number, y: number, brushSize: number, textureSrc: string, layer: 'background' | 'foreground', opacity?: number, softness?: number, color?: string, shape?: 'circle' | 'rough', roughness?: number, smooth?: boolean, isMaskStroke?: boolean, maskMode?: 'add' | 'subtract') => void;
     getDataURL: () => string;
+    getLayerData: () => { background: string | null; foreground: string | null };
     setInteractive: (interactive: boolean) => void;
 }
 
-const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, height, initialData, maskEffectsEnabled, maskEffectsSettings }, ref) => {
+const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, height, initialBackgroundData, initialForegroundData, initialData, maskEffectsEnabled, maskEffectsSettings }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const foregroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const backgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -115,15 +119,16 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                     // Full Quality Rendering
 
                     // Ripples
-                    if (maskEffectsSettings.ripples.enabled) {
-                        const { count, width: rippleWidth, gap } = maskEffectsSettings.ripples;
-                        const rippleColor = 'rgba(100, 200, 255, 0.5)';
+                        if (maskEffectsSettings.ripples.enabled) {
+                            const { count, width: rippleWidth, gap } = maskEffectsSettings.ripples;
+                            const rippleColor = 'rgba(168, 232, 255, 0.85)';
 
-                        for (let i = count; i > 0; i--) {
-                            const blur = (i * gap) + rippleWidth;
-                            drawEffect(rippleColor, blur, 1 - (i / count) * 0.5);
+                            for (let i = count; i > 0; i--) {
+                                const blur = (i * gap) + rippleWidth;
+                                const falloff = 1 - (i / count) * 0.6;
+                                drawEffect(rippleColor, blur, falloff);
+                            }
                         }
-                    }
 
                     // Outer Shadows
                     if (maskEffectsSettings.shadows.outer.enabled) {
@@ -185,20 +190,17 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
         }
 
         const bgCtx = backgroundCanvas.getContext('2d');
+        const fgCtx = foregroundCanvas.getContext('2d');
 
         if (bgCtx) {
-            if (initialData) {
-                // If we have initial data, we assume it's the full map. 
-                // Ideally we would split it, but we can't. 
-                // So we treat it as "Water" (Background) for now so new painting goes on top.
-                // OR we treat it as "Land" if it was painted? 
-                // For now, let's load it into the Background canvas so it acts as the base.
+            if (initialBackgroundData || initialData) {
                 const img = new Image();
                 img.onload = () => {
+                    bgCtx.clearRect(0, 0, width, height);
                     bgCtx.drawImage(img, 0, 0);
                     scheduleCompose();
                 };
-                img.src = initialData;
+                img.src = initialBackgroundData || initialData!;
             } else {
                 // Initialize with water texture by default
                 const img = new Image();
@@ -213,7 +215,27 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                 };
             }
         }
-    }, [width, height, initialData]);
+
+        if (fgCtx && initialForegroundData) {
+            const img = new Image();
+            img.onload = () => {
+                fgCtx.clearRect(0, 0, width, height);
+                fgCtx.drawImage(img, 0, 0);
+                // Seed mask canvas from loaded foreground so masked rendering works
+                const mCtx = maskCanvas.getContext('2d');
+                if (mCtx) {
+                    mCtx.clearRect(0, 0, width, height);
+                    mCtx.drawImage(foregroundCanvas, 0, 0);
+                    mCtx.globalCompositeOperation = 'source-in';
+                    mCtx.fillStyle = '#000000';
+                    mCtx.fillRect(0, 0, width, height);
+                    mCtx.globalCompositeOperation = 'source-over';
+                }
+                scheduleCompose();
+            };
+            img.src = initialForegroundData;
+        }
+    }, [width, height, initialData, initialBackgroundData, initialForegroundData]);
 
     // Re-compose when mask effects settings change
     useEffect(() => {
@@ -467,6 +489,11 @@ const TerrainLayer = forwardRef<TerrainLayerRef, TerrainLayerProps>(({ width, he
                 }
             }
             return tempCanvas.toDataURL();
+        },
+        getLayerData: () => {
+            const bg = backgroundCanvasRef.current?.toDataURL() ?? null;
+            const fg = foregroundCanvasRef.current?.toDataURL() ?? null;
+            return { background: bg, foreground: fg };
         },
         setInteractive: (interactive: boolean) => {
             isInteractiveRef.current = interactive;

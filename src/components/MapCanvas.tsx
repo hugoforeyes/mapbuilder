@@ -10,11 +10,12 @@ import type { MaskSettings } from '../types';
 interface MapCanvasProps {
     width: number;
     height: number;
-    terrainData: string | null;
+    backgroundData: string | null;
+    foregroundData: string | null;
     items: MapItem[];
     selectedTool: ToolType;
     selectedAsset: string | null;
-    onUpdateTerrain: (data: string) => void;
+    onUpdateTerrain: (data: { background: string | null, foreground: string | null }) => void;
     brushSize: number;
     onAddItem: (item: MapItem) => void;
     onUpdateItem: (id: string, newAttrs: Partial<MapItem>) => void;
@@ -96,7 +97,8 @@ const ItemCursor = ({ x, y, src, size, opacity }: { x: number; y: number; src: s
 const MapCanvas: React.FC<MapCanvasProps> = ({
     width,
     height,
-    terrainData,
+    backgroundData,
+    foregroundData,
     items,
     selectedTool,
     selectedAsset,
@@ -375,7 +377,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
             isPainting.current = false;
             if (terrainLayerRef.current) {
                 terrainLayerRef.current.setInteractive(false);
-                onUpdateTerrain(terrainLayerRef.current.getDataURL());
+                onUpdateTerrain(terrainLayerRef.current.getLayerData());
             }
             lastPaintPos.current = null;
         }
@@ -463,7 +465,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                         ref={terrainLayerRef}
                         width={width}
                         height={height}
-                        initialData={terrainData}
+                        initialBackgroundData={backgroundData}
+                        initialForegroundData={foregroundData}
                         maskEffectsEnabled={maskEffectsEnabled}
                         maskEffectsSettings={maskEffectsSettings}
                     />
