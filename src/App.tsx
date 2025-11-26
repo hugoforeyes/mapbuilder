@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import MapCanvas from './components/MapCanvas';
 import Toolbar from './components/Toolbar';
 import RightPanel from './components/RightPanel';
 import TopBar from './components/TopBar';
 import ToolOptionsPanel from './components/ToolOptionsPanel';
 import type { MapItem, ToolType, MaskSettings } from './types';
-import { useEffect, useRef } from 'react';
+
+type Snapshot = {
+  backgroundData: string | null;
+  foregroundData: string | null;
+  items: MapItem[];
+};
 
 function App() {
   const [selectedTool, setSelectedTool] = useState<ToolType>('select');
@@ -44,26 +49,63 @@ function App() {
   const [itemPlacementMode, setItemPlacementMode] = useState<'single' | 'multiple'>('single');
   const [isRandomPlacement, setIsRandomPlacement] = useState(true);
   const [maskAction, setMaskAction] = useState<'add' | 'subtract'>('add');
+  const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
+  const isRestoringRef = useRef(false);
 
   // Removed auto-resize logic to keep fixed default size
 
+  const takeSnapshot = (): Snapshot => ({
+    backgroundData,
+    foregroundData,
+    items
+  });
+
+  const pushUndo = () => {
+    if (isRestoringRef.current) return;
+    setUndoStack((prev) => {
+      const snapshot = takeSnapshot();
+      const last = prev[prev.length - 1];
+      if (last && last.backgroundData === snapshot.backgroundData && last.foregroundData === snapshot.foregroundData && JSON.stringify(last.items) === JSON.stringify(snapshot.items)) {
+        return prev;
+      }
+      return [...prev, snapshot];
+    });
+    setRedoStack([]);
+  };
+
+  const applySnapshot = (snapshot: Snapshot) => {
+    isRestoringRef.current = true;
+    setBackgroundData(snapshot.backgroundData);
+    setForegroundData(snapshot.foregroundData);
+    setItems(snapshot.items);
+    setSelectedItemId(null);
+    requestAnimationFrame(() => {
+      isRestoringRef.current = false;
+    });
+  };
+
   const handleUpdateTerrain = (data: { background: string | null, foreground: string | null }) => {
+    pushUndo();
     setBackgroundData(data.background);
     setForegroundData(data.foreground);
   };
 
   const handleAddItem = (item: MapItem) => {
+    pushUndo();
     setItems((prev) => [...prev, item]);
     setSelectedItemId(item.id);
   };
 
   const handleUpdateItem = (id: string, newAttrs: Partial<MapItem>) => {
+    pushUndo();
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...newAttrs } : item))
     );
   };
 
   const handleDeleteItem = (id: string) => {
+    pushUndo();
     setItems(prev => prev.filter(i => i.id !== id));
     if (selectedItemId === id) setSelectedItemId(null);
   };
@@ -101,9 +143,33 @@ function App() {
     };
   }, [selectedTool]);
 
+  const undo = () => {
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) return prevUndo;
+      setRedoStack((prevRedo) => [...prevRedo, takeSnapshot()]);
+      const nextUndo = [...prevUndo];
+      const last = nextUndo.pop()!;
+      applySnapshot(last);
+      return nextUndo;
+    });
+  };
+
+  const redo = () => {
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) return prevRedo;
+      setUndoStack((prevUndo) => [...prevUndo, takeSnapshot()]);
+      const nextRedo = [...prevRedo];
+      const last = nextRedo.pop()!;
+      applySnapshot(last);
+      return nextRedo;
+    });
+  };
+
   const handleClearMap = () => {
     if (window.confirm('Are you sure you want to clear the map?')) {
-      setTerrainData(null);
+      pushUndo();
+      setBackgroundData(null);
+      setForegroundData(null);
       setItems([]);
     }
   };
@@ -135,6 +201,7 @@ function App() {
         try {
           const parsed = JSON.parse(reader.result as string);
           if (parsed) {
+            pushUndo();
             if (typeof parsed.backgroundData === 'string' || parsed.backgroundData === null) {
               setBackgroundData(parsed.backgroundData || null);
             } else if (typeof parsed.terrainData === 'string') {
@@ -161,7 +228,15 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-300 overflow-hidden font-sans">
-      <TopBar onSaveMap={handleSaveMap} onLoadMap={handleLoadMap} onClearMap={handleClearMap} />
+      <TopBar
+        onSaveMap={handleSaveMap}
+        onLoadMap={handleLoadMap}
+        onClearMap={handleClearMap}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={undoStack.length > 0}
+        canRedo={redoStack.length > 0}
+      />
 
       <div className="flex flex-1 overflow-hidden relative">
         <Toolbar

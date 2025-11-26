@@ -4,9 +4,13 @@ interface TopBarProps {
     onSaveMap: () => void;
     onLoadMap: () => void;
     onClearMap: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onSaveMap, onLoadMap, onClearMap }) => {
+const TopBar: React.FC<TopBarProps> = ({ onSaveMap, onLoadMap, onClearMap, onUndo, onRedo, canUndo, canRedo }) => {
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -29,12 +33,22 @@ const TopBar: React.FC<TopBarProps> = ({ onSaveMap, onLoadMap, onClearMap }) => 
             <div className="flex items-center space-x-4 mr-8">
                 {/* History Controls */}
                 <div className="flex space-x-1">
-                    <button className="p-1 hover:text-gold-400 transition-colors" title="Undo">
+                    <button
+                        className={`p-1 transition-colors ${canUndo ? 'hover:text-gold-400' : 'text-zinc-700 cursor-not-allowed'}`}
+                        title="Undo"
+                        onClick={onUndo}
+                        disabled={!canUndo}
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                         </svg>
                     </button>
-                    <button className="p-1 hover:text-gold-400 transition-colors" title="Redo">
+                    <button
+                        className={`p-1 transition-colors ${canRedo ? 'hover:text-gold-400' : 'text-zinc-700 cursor-not-allowed'}`}
+                        title="Redo"
+                        onClick={onRedo}
+                        disabled={!canRedo}
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
                         </svg>
