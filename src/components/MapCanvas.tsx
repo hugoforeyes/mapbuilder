@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Stage, Layer, Image as KonvaImage, Transformer, Circle } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Transformer, Circle, Text as KonvaText, Rect } from 'react-konva';
 import useImage from 'use-image';
-import type { MapItem, ToolType } from '../types';
+import type { MapElement, MapItem, ToolType } from '../types';
 import Konva from 'konva';
 import type { TerrainLayerRef } from './TerrainLayer';
 import TerrainLayer from './TerrainLayer';
@@ -12,16 +12,36 @@ interface MapCanvasProps {
     height: number;
     backgroundData: string | null;
     foregroundData: string | null;
-    items: MapItem[];
+    items: MapElement[];
     selectedTool: ToolType;
     selectedAsset: string | null;
     onUpdateTerrain: (data: { background: string | null, foreground: string | null }) => void;
     brushSize: number;
-    onAddItem: (item: MapItem) => void;
-    onUpdateItem: (id: string, newAttrs: Partial<MapItem>) => void;
+    onAddItem: (item: MapElement) => void;
+    onUpdateItem: (id: string, newAttrs: Partial<MapElement>) => void;
     onSelectItem: (id: string | null) => void;
     selectedItemId: string | null;
     brushOpacity: number;
+    itemOpacity: number;
+    textOptions: {
+        text: string;
+        fontFamily: string;
+        fontSize: number;
+        fill: string;
+        opacity: number;
+        strokeEnabled: boolean;
+        stroke: string;
+        strokeWidth: number;
+        shadowEnabled: boolean;
+        shadowColor: string;
+        shadowBlur: number;
+        shadowOffsetX: number;
+        shadowOffsetY: number;
+        shadowOpacity: number;
+        align: 'left' | 'center' | 'right';
+        letterSpacing: number;
+        lineHeight: number;
+    };
     brushSoftness: number;
     brushShape: 'circle' | 'rough';
     brushRoughness: number;
@@ -109,6 +129,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     onSelectItem,
     selectedItemId,
     brushOpacity,
+    itemOpacity,
+    textOptions,
     brushSoftness,
     brushShape,
     brushRoughness,
@@ -125,12 +147,17 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     const stageRef = useRef<Konva.Stage>(null);
     const trRef = useRef<Konva.Transformer>(null);
     const terrainLayerRef = useRef<TerrainLayerRef>(null);
+    const itemsLayerRef = useRef<Konva.Layer>(null);
+    const cursorLayerRef = useRef<Konva.Layer>(null);
     const isPainting = useRef(false);
     const [stageScale, setStageScale] = useState(1);
     const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
     const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+    const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+    const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
 
     const lastPaintPos = useRef<{ x: number; y: number } | null>(null);
+    const imageItems = items.filter((item): item is MapItem => item.type === 'item');
 
     const getWorldPointerPosition = (stage: Konva.Stage) => {
         const pointer = stage.getPointerPosition();
@@ -160,6 +187,12 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
             trRef.current.getLayer()?.batchDraw();
         }
     }, [selectedItemId, items]); // Depend on items to retry if item added
+
+    // Keep items rendered above any terrain/foreground content
+    useEffect(() => {
+        itemsLayerRef.current?.moveToTop();
+        cursorLayerRef.current?.moveToTop(); // Cursor stays above items
+    }, [items.length]);
 
     const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
         e.evt.preventDefault();
@@ -231,9 +264,15 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                     rotation: 0,
                     scaleX: 1,
                     scaleY: 1,
-                    opacity: brushOpacity,
+                    opacity: itemOpacity,
                 });
                 lastPaintPos.current = pos;
+            }
+        } else if (selectedTool === 'select' && e.target === stage) {
+            const pos = getWorldPointerPosition(stage);
+            if (pos) {
+                selectionStartRef.current = pos;
+                setSelectionRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
             }
         }
     };
@@ -250,6 +289,18 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
             }
         } else {
             if (cursorPos) setCursorPos(null);
+        }
+
+        if (selectedTool === 'select' && selectionStartRef.current && e.target === stage) {
+            const pos = getWorldPointerPosition(stage);
+            if (pos) {
+                const start = selectionStartRef.current;
+                const rectX = Math.min(start.x, pos.x);
+                const rectY = Math.min(start.y, pos.y);
+                const rectW = Math.abs(pos.x - start.x);
+                const rectH = Math.abs(pos.y - start.y);
+                setSelectionRect({ x: rectX, y: rectY, width: rectW, height: rectH });
+            }
         }
 
         if (!isPainting.current) return;
@@ -310,7 +361,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
                     if (distance >= spacing) {
                         // Check for collision with existing items
-                        const hasCollision = items.some(item => {
+                        const hasCollision = imageItems.some(item => {
                             const itemDx = pos.x - item.x;
                             const itemDy = pos.y - item.y;
                             const itemDist = Math.sqrt(itemDx * itemDx + itemDy * itemDy);
@@ -331,7 +382,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                                 rotation: 0,
                                 scaleX: 1,
                                 scaleY: 1,
-                                opacity: brushOpacity,
+                                opacity: itemOpacity,
                             });
                             if (isRandomPlacement) {
                                 onSelectAsset?.(assetToPlace);
@@ -341,7 +392,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                     }
                 } else {
                     // Check for collision with existing items
-                    const hasCollision = items.some(item => {
+                    const hasCollision = imageItems.some(item => {
                         const itemDx = pos.x - item.x;
                         const itemDy = pos.y - item.y;
                         const itemDist = Math.sqrt(itemDx * itemDx + itemDy * itemDy);
@@ -360,7 +411,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                             rotation: 0,
                             scaleX: 1,
                             scaleY: 1,
-                            opacity: brushOpacity,
+                            opacity: itemOpacity,
                         });
                         if (isRandomPlacement) {
                             onSelectAsset?.(assetToPlace);
@@ -373,6 +424,43 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     };
 
     const handleStageMouseUp = () => {
+        if (selectedTool === 'select' && selectionStartRef.current) {
+            const stage = stageRef.current;
+            if (stage && selectionRect) {
+                const scale = stage.scaleX();
+                const stageX = stage.x();
+                const stageY = stage.y();
+                const selWorld = selectionRect;
+                const nodes = itemsLayerRef.current?.find('Image,Text') || [];
+                const selectedIds: string[] = [];
+                nodes.forEach((node: any) => {
+                    const box = node.getClientRect();
+                    const worldBox = {
+                        x: (box.x - stageX) / scale,
+                        y: (box.y - stageY) / scale,
+                        width: box.width / scale,
+                        height: box.height / scale,
+                    };
+                    const intersects =
+                        worldBox.x < selWorld.x + selWorld.width &&
+                        worldBox.x + worldBox.width > selWorld.x &&
+                        worldBox.y < selWorld.y + selWorld.height &&
+                        worldBox.y + worldBox.height > selWorld.y;
+                    if (intersects) {
+                        selectedIds.push(node.id());
+                    }
+                });
+                if (selectedIds.length === 1) {
+                    onSelectItem(selectedIds[0]);
+                } else {
+                    onSelectItem(null);
+                }
+            }
+            selectionStartRef.current = null;
+            setSelectionRect(null);
+            return;
+        }
+
         if (isPainting.current) {
             isPainting.current = false;
             if (terrainLayerRef.current) {
@@ -397,6 +485,39 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         // Brush Tool Logic is handled in mouse move/down/up now
 
+        if (selectedTool === 'text') {
+            const textContent = textOptions.text.trim();
+            if (!textContent) return;
+
+            onAddItem({
+                id: `text-${Date.now()}`,
+                type: 'text',
+                text: textContent,
+                fontFamily: textOptions.fontFamily,
+                fontSize: textOptions.fontSize,
+                fill: textOptions.fill,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                x: pointerPosition.x,
+                y: pointerPosition.y,
+                opacity: textOptions.opacity,
+                strokeEnabled: textOptions.strokeEnabled,
+                stroke: textOptions.stroke,
+                strokeWidth: textOptions.strokeWidth,
+                shadowEnabled: textOptions.shadowEnabled,
+                shadowColor: textOptions.shadowColor,
+                shadowBlur: textOptions.shadowBlur,
+                shadowOffsetX: textOptions.shadowOffsetX,
+                shadowOffsetY: textOptions.shadowOffsetY,
+                shadowOpacity: textOptions.shadowOpacity,
+                align: textOptions.align,
+                letterSpacing: textOptions.letterSpacing,
+                lineHeight: textOptions.lineHeight,
+            });
+            return;
+        }
+
         // Item Tool
         if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'single') {
             // Determine which asset to place
@@ -417,7 +538,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
-                opacity: brushOpacity,
+                opacity: itemOpacity,
             });
             if (isRandomPlacement) {
                 onSelectAsset?.(assetToPlace);
@@ -471,40 +592,92 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                         maskEffectsSettings={maskEffectsSettings}
                     />
                 </Layer>
-                <Layer>
+                <Layer ref={itemsLayerRef}>
                     {/* Items Layer */}
                     {items.map((item) => (
-                        <URLImage
-                            key={item.id}
-                            {...item}
-                            draggable={selectedTool === 'select'}
+                        item.type === 'item' ? (
+                            <URLImage
+                                key={item.id}
+                                {...item}
+                                draggable={selectedTool === 'select'}
                             onClick={(e: any) => {
                                 if (selectedTool === 'select') {
                                     onSelectItem(item.id);
                                     e.cancelBubble = true;
                                 }
-                            }}
+                                }}
                             onDragEnd={(e: any) => {
                                 onUpdateItem(item.id, {
                                     x: e.target.x(),
                                     y: e.target.y(),
                                 });
                             }}
-                            onTransformEnd={(e: any) => {
-                                const node = e.target;
-                                const scaleX = node.scaleX();
-                                const scaleY = node.scaleY();
-                                // reset scale to 1 and adjust width/height or keep scale?
-                                // Konva transformer changes scale.
-                                onUpdateItem(item.id, {
-                                    x: node.x(),
-                                    y: node.y(),
-                                    rotation: node.rotation(),
-                                    scaleX: scaleX,
-                                    scaleY: scaleY,
-                                });
-                            }}
-                        />
+                                onTransformEnd={(e: any) => {
+                                    const node = e.target;
+                                    const scaleX = node.scaleX();
+                                    const scaleY = node.scaleY();
+                                    onUpdateItem(item.id, {
+                                        x: node.x(),
+                                        y: node.y(),
+                                        rotation: node.rotation(),
+                                        scaleX: scaleX,
+                                        scaleY: scaleY,
+                                    });
+                                }}
+                            />
+                        ) : (
+                            <KonvaText
+                                key={item.id}
+                                id={item.id}
+                                text={item.text}
+                                x={item.x}
+                                y={item.y}
+                                fontFamily={item.fontFamily}
+                                fontSize={item.fontSize}
+                                fill={item.fill}
+                                opacity={item.opacity}
+                                align={item.align}
+                                letterSpacing={item.letterSpacing}
+                                lineHeight={item.lineHeight}
+                                stroke={item.strokeEnabled ? item.stroke : undefined}
+                                strokeWidth={item.strokeEnabled ? item.strokeWidth : 0}
+                                shadowEnabled={item.shadowEnabled}
+                                shadowColor={item.shadowColor}
+                                shadowBlur={item.shadowBlur}
+                                shadowOffsetX={item.shadowOffsetX}
+                                shadowOffsetY={item.shadowOffsetY}
+                                shadowOpacity={item.shadowOpacity}
+                                scaleX={item.scaleX}
+                                scaleY={item.scaleY}
+                                rotation={item.rotation}
+                                draggable={selectedTool === 'select' || selectedTool === 'text'}
+                                onClick={(e: any) => {
+                                    if (selectedTool === 'select' || selectedTool === 'text') {
+                                        onSelectItem(item.id);
+                                        e.cancelBubble = true;
+                                    }
+                                }}
+                                onDragEnd={(e: any) => {
+                                    onUpdateItem(item.id, {
+                                        x: e.target.x(),
+                                        y: e.target.y(),
+                                    });
+                                }}
+                                onTransformEnd={(e: any) => {
+                                    const node = e.target as Konva.Text;
+                                    onUpdateItem(item.id, {
+                                        x: node.x(),
+                                        y: node.y(),
+                                        rotation: node.rotation(),
+                                        scaleX: node.scaleX(),
+                                        scaleY: node.scaleY(),
+                                        fontSize: node.fontSize(),
+                                        letterSpacing: node.letterSpacing(),
+                                        lineHeight: node.lineHeight(),
+                                    });
+                                }}
+                            />
+                        )
                     ))}
                     {selectedItemId && (
                         <Transformer
@@ -521,7 +694,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                         />
                     )}
                 </Layer>
-                <Layer>
+                <Layer ref={cursorLayerRef}>
                     {/* Cursor Layer */}
                     {(selectedTool === 'brush' || selectedTool === 'mask') && cursorPos && (
                         <BrushCursor
@@ -537,7 +710,20 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                             y={cursorPos.y}
                             src={selectedAsset}
                             size={brushSize}
-                            opacity={brushOpacity}
+                            opacity={itemOpacity}
+                        />
+                    )}
+                    {selectedTool === 'select' && selectionRect && (
+                        <Rect
+                            x={selectionRect.x}
+                            y={selectionRect.y}
+                            width={selectionRect.width}
+                            height={selectionRect.height}
+                            stroke="rgba(255, 215, 0, 0.7)"
+                            strokeWidth={1}
+                            dash={[4, 4]}
+                            fill="rgba(255, 215, 0, 0.1)"
+                            listening={false}
                         />
                     )}
                 </Layer>

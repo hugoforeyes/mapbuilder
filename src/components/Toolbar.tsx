@@ -73,7 +73,10 @@ const Toolbar: React.FC<ToolbarProps> = ({ selectedTool, onSelectTool }) => {
 
                 <div className="w-full h-px bg-zinc-800 my-1"></div>
 
-                <button className="p-1.5 text-zinc-500 hover:text-zinc-300 group relative">
+                <button
+                    className={`p-1.5 rounded transition-colors group relative ${selectedTool === 'text' ? 'text-yellow-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    onClick={() => onSelectTool('text')}
+                >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
                     </svg>

@@ -4,12 +4,12 @@ import Toolbar from './components/Toolbar';
 import RightPanel from './components/RightPanel';
 import TopBar from './components/TopBar';
 import ToolOptionsPanel from './components/ToolOptionsPanel';
-import type { MapItem, ToolType, MaskSettings } from './types';
+import type { MapElement, MapItem, MapText, ToolType, MaskSettings } from './types';
 
 type Snapshot = {
   backgroundData: string | null;
   foregroundData: string | null;
-  items: MapItem[];
+  items: MapElement[];
 };
 
 function App() {
@@ -19,7 +19,7 @@ function App() {
   const [selectedItemAsset, setSelectedItemAsset] = useState<string | null>(null);
   const [backgroundData, setBackgroundData] = useState<string | null>(null);
   const [foregroundData, setForegroundData] = useState<string | null>(null);
-  const [items, setItems] = useState<MapItem[]>([]);
+  const [items, setItems] = useState<MapElement[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [canvasSize] = useState({ width: 2048, height: 1536 });
 
@@ -42,6 +42,7 @@ function App() {
   const [brushShape, setBrushShape] = useState<'circle' | 'rough'>('rough');
   const [brushRoughness, setBrushRoughness] = useState(8);
   const [brushSmooth, setBrushSmooth] = useState(true);
+  const [itemOpacity, setItemOpacity] = useState(1);
   const [selectedLayer, setSelectedLayer] = useState<'background' | 'foreground'>('foreground');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [selectedBrushGroup, setSelectedBrushGroup] = useState<string[] | null>(null);
@@ -49,6 +50,42 @@ function App() {
   const [itemPlacementMode, setItemPlacementMode] = useState<'single' | 'multiple'>('single');
   const [isRandomPlacement, setIsRandomPlacement] = useState(true);
   const [maskAction, setMaskAction] = useState<'add' | 'subtract'>('add');
+  const [textValue, setTextValue] = useState('Text');
+  const [textFontFamily, setTextFontFamily] = useState('IM Fell English SC, serif');
+  const [textFontSize, setTextFontSize] = useState(24);
+  const [textFill, setTextFill] = useState('#ffffff');
+  const [textOpacity, setTextOpacity] = useState(0.9);
+  const [textStrokeEnabled, setTextStrokeEnabled] = useState(true);
+  const [textStrokeColor, setTextStrokeColor] = useState('#000000');
+  const [textStrokeAlpha, setTextStrokeAlpha] = useState(0.85);
+  const [textStrokeWidth, setTextStrokeWidth] = useState(0.5);
+  const [textShadowEnabled, setTextShadowEnabled] = useState(false);
+  const [textShadowColor, setTextShadowColor] = useState('#000000');
+  const [textShadowBlur, setTextShadowBlur] = useState(6);
+  const [textShadowOffsetX, setTextShadowOffsetX] = useState(0);
+  const [textShadowOffsetY, setTextShadowOffsetY] = useState(0);
+  const [textShadowOpacity, setTextShadowOpacity] = useState(0.6);
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
+  const [textLetterSpacing, setTextLetterSpacing] = useState(0);
+  const [textLineHeight, setTextLineHeight] = useState(1);
+  const hexToRgba = (hex: string, alpha: number) => {
+    const normalized = hex.replace('#', '');
+    const full = normalized.length === 3 ? normalized.split('').map((c) => c + c).join('') : normalized.padEnd(6, '0');
+    const int = parseInt(full.slice(0, 6), 16);
+    const r = (int >> 16) & 255;
+    const g = (int >> 8) & 255;
+    const b = int & 255;
+    return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+  };
+  const applyLiveTextUpdate = (attrs: Partial<Omit<MapText, 'type'>>) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.type !== 'text' || item.id !== selectedItemId) return item;
+        const updated: MapText = { ...item, ...attrs };
+        return updated;
+      })
+    );
+  };
   const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
   const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
   const isRestoringRef = useRef(false);
@@ -91,16 +128,22 @@ function App() {
     setForegroundData(data.foreground);
   };
 
-  const handleAddItem = (item: MapItem) => {
+  const handleAddItem = (item: MapElement) => {
     pushUndo();
     setItems((prev) => [...prev, item]);
     setSelectedItemId(item.id);
   };
 
-  const handleUpdateItem = (id: string, newAttrs: Partial<MapItem>) => {
+  const handleUpdateItem = (id: string, newAttrs: Partial<MapElement>) => {
     pushUndo();
     setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...newAttrs } : item))
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (item.type === 'text') {
+          return { ...item, ...(newAttrs as Partial<MapText>) };
+        }
+        return { ...item, ...(newAttrs as Partial<MapItem>) };
+      })
     );
   };
 
@@ -108,6 +151,18 @@ function App() {
     pushUndo();
     setItems(prev => prev.filter(i => i.id !== id));
     if (selectedItemId === id) setSelectedItemId(null);
+  };
+
+  const handleSelectElement = (id: string | null) => {
+    setSelectedItemId(id);
+    if (!id) return;
+    const element = items.find((el) => el.id === id);
+    if (!element) return;
+    if (element.type === 'text') {
+      setSelectedTool('text');
+    } else if (element.type === 'item') {
+      setSelectedTool('item');
+    }
   };
 
   useEffect(() => {
@@ -123,6 +178,12 @@ function App() {
         if (selectedTool !== 'hand') {
           previousToolRef.current = selectedTool;
           setSelectedTool('hand');
+        }
+      }
+      if (e.code === 'Delete' || e.code === 'Backspace') {
+        if (isTypingTarget(e.target)) return;
+        if (selectedItemId) {
+          handleDeleteItem(selectedItemId);
         }
       }
     };
@@ -262,6 +323,99 @@ function App() {
           setBrushSmooth={setBrushSmooth}
           selectedLayer={selectedLayer}
           setSelectedLayer={setSelectedLayer}
+          itemOpacity={itemOpacity}
+          setItemOpacity={setItemOpacity}
+          textValue={textValue}
+          setTextValue={(value) => {
+            setTextValue(value);
+            applyLiveTextUpdate({ text: value });
+          }}
+          textFontFamily={textFontFamily}
+          setTextFontFamily={(font) => {
+            setTextFontFamily(font);
+            applyLiveTextUpdate({ fontFamily: font });
+          }}
+          textFontSize={textFontSize}
+          setTextFontSize={(size) => {
+            setTextFontSize(size);
+            applyLiveTextUpdate({ fontSize: size });
+          }}
+          textFill={textFill}
+          setTextFill={(color) => {
+            setTextFill(color);
+            applyLiveTextUpdate({ fill: color });
+          }}
+          textOpacity={textOpacity}
+          setTextOpacity={(opacity) => {
+            setTextOpacity(opacity);
+            applyLiveTextUpdate({ opacity });
+          }}
+          textStrokeEnabled={textStrokeEnabled}
+          setTextStrokeEnabled={(enabled) => {
+            setTextStrokeEnabled(enabled);
+            applyLiveTextUpdate({ strokeEnabled: enabled });
+          }}
+          textStrokeColor={textStrokeColor}
+          setTextStrokeColor={(color) => {
+            setTextStrokeColor(color);
+            applyLiveTextUpdate({ stroke: hexToRgba(color, textStrokeAlpha) });
+          }}
+          textStrokeAlpha={textStrokeAlpha}
+          setTextStrokeAlpha={(alpha) => {
+            setTextStrokeAlpha(alpha);
+            applyLiveTextUpdate({ stroke: hexToRgba(textStrokeColor, alpha) });
+          }}
+          textStrokeWidth={textStrokeWidth}
+          setTextStrokeWidth={(width) => {
+            setTextStrokeWidth(width);
+            applyLiveTextUpdate({ strokeWidth: width });
+          }}
+          textShadowEnabled={textShadowEnabled}
+          setTextShadowEnabled={(enabled) => {
+            setTextShadowEnabled(enabled);
+            applyLiveTextUpdate({ shadowEnabled: enabled });
+          }}
+          textShadowColor={textShadowColor}
+          setTextShadowColor={(color) => {
+            setTextShadowColor(color);
+            applyLiveTextUpdate({ shadowColor: color });
+          }}
+          textShadowBlur={textShadowBlur}
+          setTextShadowBlur={(blur) => {
+            setTextShadowBlur(blur);
+            applyLiveTextUpdate({ shadowBlur: blur });
+          }}
+          textShadowOffsetX={textShadowOffsetX}
+          setTextShadowOffsetX={(offset) => {
+            setTextShadowOffsetX(offset);
+            applyLiveTextUpdate({ shadowOffsetX: offset });
+          }}
+          textShadowOffsetY={textShadowOffsetY}
+          setTextShadowOffsetY={(offset) => {
+            setTextShadowOffsetY(offset);
+            applyLiveTextUpdate({ shadowOffsetY: offset });
+          }}
+          textShadowOpacity={textShadowOpacity}
+          setTextShadowOpacity={(opacity) => {
+            setTextShadowOpacity(opacity);
+            applyLiveTextUpdate({ shadowOpacity: opacity });
+          }}
+          textAlign={textAlign}
+          setTextAlign={(align) => {
+            setTextAlign(align);
+            applyLiveTextUpdate({ align });
+          }}
+          textLetterSpacing={textLetterSpacing}
+          setTextLetterSpacing={(spacing) => {
+            setTextLetterSpacing(spacing);
+            applyLiveTextUpdate({ letterSpacing: spacing });
+          }}
+          textLineHeight={textLineHeight}
+          setTextLineHeight={(lineHeight) => {
+            setTextLineHeight(lineHeight);
+            applyLiveTextUpdate({ lineHeight });
+          }}
+          selectedItemId={selectedItemId}
           selectedGroup={(selectedTool === 'brush' || selectedTool === 'mask') ? selectedBrushGroup : selectedItemGroup}
           onSelectAsset={(asset) => {
             if (selectedTool === 'brush' || selectedTool === 'mask') {
@@ -297,9 +451,29 @@ function App() {
               brushSize={brushSize}
               onAddItem={handleAddItem}
               onUpdateItem={handleUpdateItem}
-              onSelectItem={setSelectedItemId}
+              onSelectItem={handleSelectElement}
               selectedItemId={selectedItemId}
               brushOpacity={brushOpacity}
+              itemOpacity={itemOpacity}
+              textOptions={{
+                text: textValue,
+                fontFamily: textFontFamily,
+                fontSize: textFontSize,
+                fill: textFill,
+                opacity: textOpacity,
+                strokeEnabled: textStrokeEnabled,
+                stroke: textStrokeColor,
+                strokeWidth: textStrokeWidth,
+                shadowEnabled: textShadowEnabled,
+                shadowColor: textShadowColor,
+                shadowBlur: textShadowBlur,
+                shadowOffsetX: textShadowOffsetX,
+                shadowOffsetY: textShadowOffsetY,
+                shadowOpacity: textShadowOpacity,
+                align: textAlign,
+                letterSpacing: textLetterSpacing,
+                lineHeight: textLineHeight,
+              }}
               brushSoftness={brushSoftness}
               brushShape={brushShape}
               brushRoughness={brushRoughness}
@@ -357,7 +531,7 @@ function App() {
                   }}
                   selectedAsset={(selectedTool === 'brush' || selectedTool === 'mask') ? selectedBrushTexture : selectedItemAsset}
                   items={items}
-                  onSelectItem={setSelectedItemId}
+                  onSelectItem={handleSelectElement}
                   selectedItemId={selectedItemId}
                   onDeleteItem={handleDeleteItem}
                 />

@@ -1,16 +1,43 @@
-export interface MapItem {
+export type ToolType = 'brush' | 'item' | 'select' | 'hand' | 'mask' | 'text';
+
+interface MapBase {
     id: string;
-    type: 'item';
-    src: string;
     x: number;
     y: number;
-    width: number;
-    height: number;
     rotation: number;
     scaleX: number;
     scaleY: number;
     opacity?: number;
 }
+
+export interface MapItem extends MapBase {
+    type: 'item';
+    src: string;
+    width: number;
+    height: number;
+}
+
+export interface MapText extends MapBase {
+    type: 'text';
+    text: string;
+    fontFamily: string;
+    fontSize: number;
+    fill: string;
+    strokeEnabled: boolean;
+    stroke: string;
+    strokeWidth: number;
+    shadowEnabled: boolean;
+    shadowColor: string;
+    shadowBlur: number;
+    shadowOffsetX: number;
+    shadowOffsetY: number;
+    shadowOpacity: number;
+    align: 'left' | 'center' | 'right';
+    letterSpacing: number;
+    lineHeight: number;
+}
+
+export type MapElement = MapItem | MapText;
 
 export interface BackgroundTile {
     id: string;
@@ -20,8 +47,6 @@ export interface BackgroundTile {
     width: number;
     height: number;
 }
-
-export type ToolType = 'brush' | 'item' | 'select' | 'hand' | 'mask';
 
 export interface Asset {
     name: string;

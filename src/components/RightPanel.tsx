@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import assetsData from '../assets.json';
-import type { MapItem, ToolType } from '../types';
+import type { MapElement, ToolType } from '../types';
 
 interface RightPanelProps {
     onSelectAsset: (asset: string) => void;
     selectedAsset: string | null;
-    items: MapItem[];
+    items: MapElement[];
     onSelectItem: (id: string | null) => void;
     selectedItemId: string | null;
     onDeleteItem: (id: string) => void;
@@ -222,10 +222,16 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                     }`}
                                 onClick={() => onSelectItem(item.id)}
                             >
-                                <img src={item.src} className="w-8 h-8 object-contain bg-zinc-950 rounded mr-3 border border-zinc-800" alt="layer" />
+                                {item.type === 'item' ? (
+                                    <img src={item.src} className="w-8 h-8 object-contain bg-zinc-950 rounded mr-3 border border-zinc-800" alt="layer" />
+                                ) : (
+                                    <div className="w-8 h-8 bg-zinc-950 rounded mr-3 border border-zinc-800 flex items-center justify-center text-gold-400 font-semibold text-sm">
+                                        T
+                                    </div>
+                                )}
                                 <div className="flex-1 min-w-0">
                                     <div className={`text-sm truncate ${selectedItemId === item.id ? 'text-gold-400' : 'text-zinc-300'}`}>
-                                        {item.src.split('/').pop()}
+                                        {item.type === 'item' ? item.src.split('/').pop() : `"${item.text.slice(0, 20)}"${item.text.length > 20 ? '…' : ''}`}
                                     </div>
                                     <div className="text-xs text-zinc-600 font-mono">ID: {item.id.slice(-4)}</div>
                                 </div>
