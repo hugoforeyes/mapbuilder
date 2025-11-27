@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { ToolType, MaskSettings } from '../types';
 import BrushOptions from './tool-options/BrushOptions';
+import EraserOptions from './tool-options/EraserOptions';
 import MaskOptions from './tool-options/MaskOptions';
 import ItemOptions from './tool-options/ItemOptions';
 import TextOptions from './tool-options/TextOptions';
@@ -154,11 +155,13 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
 
     const title = selectedTool === 'brush'
         ? 'Brush Tool'
-        : selectedTool === 'mask'
-            ? 'Mask Tool'
-            : selectedTool === 'item'
-                ? 'Item Tool'
-                : 'Text Tool';
+        : selectedTool === 'eraser'
+            ? 'Eraser Tool'
+            : selectedTool === 'mask'
+                ? 'Mask Tool'
+                : selectedTool === 'item'
+                    ? 'Item Tool'
+                    : 'Text Tool';
 
     return (
         <div className="absolute left-10 w-64 max-h-[calc(100vh-2.5rem)] bg-zinc-900 border border-gold-500/30 rounded shadow-xl flex flex-col text-zinc-300 select-none z-40 font-fantasy overflow-hidden">
@@ -218,6 +221,21 @@ const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
                         setBrushShape={setBrushShape}
                         brushSize={brushSize}
                         setBrushSize={setBrushSize}
+                        brushRoughness={brushRoughness}
+                        setBrushRoughness={setBrushRoughness}
+                        brushSmooth={brushSmooth}
+                        setBrushSmooth={setBrushSmooth}
+                    />
+                )}
+
+                {selectedTool === 'eraser' && (
+                    <EraserOptions
+                        brushSize={brushSize}
+                        setBrushSize={setBrushSize}
+                        brushSoftness={brushSoftness}
+                        setBrushSoftness={setBrushSoftness}
+                        brushShape={brushShape}
+                        setBrushShape={setBrushShape}
                         brushRoughness={brushRoughness}
                         setBrushRoughness={setBrushRoughness}
                         brushSmooth={brushSmooth}

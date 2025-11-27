@@ -215,6 +215,12 @@ function App() {
     };
   }, [selectedTool]);
 
+  useEffect(() => {
+    if (selectedTool === 'eraser' && selectedLayer !== 'top') {
+      setSelectedLayer('top');
+    }
+  }, [selectedTool, selectedLayer]);
+
   const undo = () => {
     setUndoStack((prevUndo) => {
       if (prevUndo.length === 0) return prevUndo;

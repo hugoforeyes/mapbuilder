@@ -22,6 +22,15 @@ export interface TopPaintLayerRef {
     ) => void;
     getDataURL: () => string | null;
     setInteractive: (interactive: boolean) => void;
+    erase: (
+        x: number,
+        y: number,
+        brushSize: number,
+        softness?: number,
+        shape?: 'circle' | 'rough',
+        roughness?: number,
+        smooth?: boolean
+    ) => void;
 }
 
 const TopPaintLayer = forwardRef<TopPaintLayerRef, TopPaintLayerProps>(({ width, height, initialData }, ref) => {
@@ -243,6 +252,82 @@ const TopPaintLayer = forwardRef<TopPaintLayerRef, TopPaintLayerProps>(({ width,
         getDataURL: () => canvasRef.current?.toDataURL() ?? null,
         setInteractive: (interactive: boolean) => {
             isInteractiveRef.current = interactive;
+        },
+        erase: (x, y, brushSize, softness = 0.5, shape: 'circle' | 'rough' = 'circle', roughness = 0.5, smooth = false) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const tipCanvas = document.createElement('canvas');
+            tipCanvas.width = brushSize * 2;
+            tipCanvas.height = brushSize * 2;
+            const tipCtx = tipCanvas.getContext('2d');
+            if (tipCtx) {
+                tipCtx.clearRect(0, 0, tipCanvas.width, tipCanvas.height);
+                tipCtx.globalCompositeOperation = 'source-over';
+
+                if (softness === 0) {
+                    tipCtx.fillStyle = 'rgba(0,0,0,1)';
+                    tipCtx.beginPath();
+                    if (shape === 'rough') {
+                        const points = 20;
+                        const radius = brushSize / 2;
+                        const pathPoints: { x: number, y: number }[] = [];
+                        for (let i = 0; i <= points; i++) {
+                            const angle = (i / points) * Math.PI * 2;
+                            const variation = roughness * 0.05;
+                            const r = radius * (1 - variation / 2 + Math.random() * variation);
+                            const px = brushSize + Math.cos(angle) * r;
+                            const py = brushSize + Math.sin(angle) * r;
+                            pathPoints.push({ x: px, y: py });
+                        }
+
+                        if (smooth) {
+                            tipCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+                            for (let i = 1; i < pathPoints.length - 2; i++) {
+                                const xc = (pathPoints[i].x + pathPoints[i + 1].x) / 2;
+                                const yc = (pathPoints[i].y + pathPoints[i + 1].y) / 2;
+                                tipCtx.quadraticCurveTo(pathPoints[i].x, pathPoints[i].y, xc, yc);
+                            }
+                            tipCtx.quadraticCurveTo(
+                                pathPoints[pathPoints.length - 2].x,
+                                pathPoints[pathPoints.length - 2].y,
+                                pathPoints[pathPoints.length - 1].x,
+                                pathPoints[pathPoints.length - 1].y
+                            );
+                        } else {
+                            tipCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+                            for (let i = 1; i < pathPoints.length; i++) {
+                                tipCtx.lineTo(pathPoints[i].x, pathPoints[i].y);
+                            }
+                        }
+                    } else {
+                        tipCtx.arc(brushSize, brushSize, brushSize / 2, 0, Math.PI * 2);
+                    }
+                    tipCtx.fill();
+                } else {
+                    const gradient = tipCtx.createRadialGradient(
+                        brushSize,
+                        brushSize,
+                        (brushSize / 2) * (1 - softness),
+                        brushSize,
+                        brushSize,
+                        brushSize / 2
+                    );
+                    gradient.addColorStop(0, 'rgba(0,0,0,1)');
+                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                    tipCtx.fillStyle = gradient;
+                    tipCtx.fillRect(0, 0, brushSize * 2, brushSize * 2);
+                }
+            }
+
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.drawImage(tipCanvas, x - brushSize, y - brushSize);
+            ctx.restore();
+
+            scheduleDraw();
         }
     }));
 

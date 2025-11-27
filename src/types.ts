@@ -1,4 +1,4 @@
-export type ToolType = 'brush' | 'item' | 'select' | 'hand' | 'mask' | 'text';
+export type ToolType = 'brush' | 'item' | 'select' | 'hand' | 'mask' | 'text' | 'eraser';
 
 interface MapBase {
     id: string;

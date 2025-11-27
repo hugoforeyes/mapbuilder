@@ -35,6 +35,18 @@ const Toolbar: React.FC<ToolbarProps> = ({ selectedTool, onSelectTool }) => {
                     </span>
                 </button>
                 <button
+                    className={`p-1.5 rounded transition-colors group relative ${selectedTool === 'eraser' ? 'text-yellow-500' : 'text-zinc-500 hover:text-zinc-300'
+                        }`}
+                    onClick={() => onSelectTool('eraser')}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17l6 6h6l6-6L13 5a2 2 0 00-3 0L3 17z" />
+                    </svg>
+                    <span className="absolute left-full ml-3 px-2 py-1 bg-zinc-900 text-zinc-300 text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-zinc-700">
+                        Eraser (E)
+                    </span>
+                </button>
+                <button
                     className={`p-1.5 rounded transition-colors group relative ${selectedTool === 'mask' ? 'text-yellow-500' : 'text-zinc-500 hover:text-zinc-300'
                         }`}
                     onClick={() => onSelectTool('mask')}
