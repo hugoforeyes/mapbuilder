@@ -2,8 +2,8 @@ import React from 'react';
 import AssetSelector from './AssetSelector';
 
 interface BrushOptionsProps {
-    selectedLayer?: 'background' | 'foreground';
-    setSelectedLayer?: (layer: 'background' | 'foreground') => void;
+    selectedLayer?: 'background' | 'foreground' | 'top';
+    setSelectedLayer?: (layer: 'background' | 'foreground' | 'top') => void;
     selectedGroup?: string[] | null;
     selectedAsset: string | null;
     onSelectAsset?: (asset: string) => void;
@@ -59,6 +59,13 @@ const BrushOptions: React.FC<BrushOptionsProps> = ({
                             className={`flex-1 py-1 px-2 text-[10px] font-medium rounded transition-colors ${selectedLayer === 'foreground' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                         >
                             Foreground
+                        </button>
+                        <button
+                            onClick={() => setSelectedLayer?.('top')}
+                            className={`flex-1 py-1 px-2 text-[10px] font-medium rounded transition-colors ${selectedLayer === 'top' ? 'bg-gold-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                            title="Always rendered above items and text"
+                        >
+                            Top
                         </button>
                     </div>
                 </div>

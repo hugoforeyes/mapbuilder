@@ -6,16 +6,19 @@ import Konva from 'konva';
 import type { TerrainLayerRef } from './TerrainLayer';
 import TerrainLayer from './TerrainLayer';
 import type { MaskSettings } from '../types';
+import TopPaintLayer from './TopPaintLayer';
+import type { TopPaintLayerRef } from './TopPaintLayer';
 
 interface MapCanvasProps {
     width: number;
     height: number;
     backgroundData: string | null;
     foregroundData: string | null;
+    topData: string | null;
     items: MapElement[];
     selectedTool: ToolType;
     selectedAsset: string | null;
-    onUpdateTerrain: (data: { background: string | null, foreground: string | null }) => void;
+    onUpdateTerrain: (data: { background: string | null, foreground: string | null, top: string | null }) => void;
     brushSize: number;
     onAddItem: (item: MapElement) => void;
     onUpdateItem: (id: string, newAttrs: Partial<MapElement>) => void;
@@ -46,7 +49,7 @@ interface MapCanvasProps {
     brushShape: 'circle' | 'rough';
     brushRoughness: number;
     brushSmooth: boolean;
-    selectedLayer?: 'background' | 'foreground';
+    selectedLayer?: 'background' | 'foreground' | 'top';
     itemPlacementMode?: 'single' | 'multiple';
     isRandomPlacement?: boolean;
     selectedItemGroup?: string[] | null;
@@ -119,6 +122,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     height,
     backgroundData,
     foregroundData,
+    topData,
     items,
     selectedTool,
     selectedAsset,
@@ -147,7 +151,9 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     const stageRef = useRef<Konva.Stage>(null);
     const trRef = useRef<Konva.Transformer>(null);
     const terrainLayerRef = useRef<TerrainLayerRef>(null);
+    const topLayerRef = useRef<TopPaintLayerRef>(null);
     const itemsLayerRef = useRef<Konva.Layer>(null);
+    const topLayerContainerRef = useRef<Konva.Layer>(null);
     const cursorLayerRef = useRef<Konva.Layer>(null);
     const isPainting = useRef(false);
     const [stageScale, setStageScale] = useState(1);
@@ -191,6 +197,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
     // Keep items rendered above any terrain/foreground content
     useEffect(() => {
         itemsLayerRef.current?.moveToTop();
+        topLayerContainerRef.current?.moveToTop();
         cursorLayerRef.current?.moveToTop(); // Cursor stays above items
     }, [items.length]);
 
@@ -228,6 +235,67 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         return selectedAsset;
     };
 
+    const getTargetLayer = () => selectedTool === 'mask' ? 'foreground' : selectedLayer;
+
+    const paintStrokeAt = (pos: { x: number; y: number }, assetOverride?: string | null) => {
+        const effectiveAsset = assetOverride ?? getEffectiveAsset();
+        if (!effectiveAsset) return;
+
+        const targetLayer = getTargetLayer();
+
+        if (targetLayer === 'top') {
+            topLayerRef.current?.paint(
+                pos.x,
+                pos.y,
+                brushSize,
+                effectiveAsset,
+                brushOpacity,
+                brushShape === 'rough' ? 0 : brushSoftness,
+                undefined,
+                brushShape,
+                brushRoughness,
+                brushSmooth
+            );
+            return;
+        }
+
+        if (!terrainLayerRef.current) return;
+
+        terrainLayerRef.current.paint(
+            pos.x,
+            pos.y,
+            brushSize,
+            effectiveAsset,
+            targetLayer,
+            brushOpacity,
+            brushShape === 'rough' ? 0 : brushSoftness,
+            undefined,
+            brushShape,
+            brushRoughness,
+            brushSmooth,
+            selectedTool === 'mask',
+            maskAction
+        );
+
+        if (selectedTool === 'mask' && maskAction === 'subtract') {
+            const backgroundBrushSize = brushSize * 2;
+            terrainLayerRef.current.paint(
+                pos.x,
+                pos.y,
+                backgroundBrushSize,
+                subtractTexture,
+                'background',
+                1,
+                brushShape === 'rough' ? 0 : brushSoftness,
+                undefined,
+                brushShape,
+                brushRoughness,
+                brushSmooth,
+                false
+            );
+        }
+    };
+
     const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
         const stage = e.target.getStage();
         if (!stage) return;
@@ -236,17 +304,15 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         if ((selectedTool === 'brush' || selectedTool === 'mask') && effectiveAsset) {
             isPainting.current = true;
-            if (terrainLayerRef.current) {
-                terrainLayerRef.current.setInteractive(true);
+            const targetLayer = getTargetLayer();
+            if (targetLayer === 'top') {
+                topLayerRef.current?.setInteractive(true);
+            } else {
+                terrainLayerRef.current?.setInteractive(true);
             }
             const pos = getWorldPointerPosition(stage);
-            if (pos && terrainLayerRef.current) {
-                const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
-                terrainLayerRef.current.paint(pos.x, pos.y, brushSize, effectiveAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
-                if (selectedTool === 'mask' && maskAction === 'subtract') {
-                    const backgroundBrushSize = brushSize * 2;
-                    terrainLayerRef.current.paint(pos.x, pos.y, backgroundBrushSize, subtractTexture, 'background', 1, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, false);
-                }
+            if (pos) {
+                paintStrokeAt(pos, effectiveAsset);
                 lastPaintPos.current = pos;
             }
         } else if (selectedTool === 'item' && selectedAsset && itemPlacementMode === 'multiple') {
@@ -309,7 +375,7 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         if ((selectedTool === 'brush' || selectedTool === 'mask') && effectiveAsset) {
             const pos = getWorldPointerPosition(stage);
-            if (pos && terrainLayerRef.current) {
+            if (pos) {
                 // Calculate distance from last paint position
                 if (lastPaintPos.current) {
                     const dx = pos.x - lastPaintPos.current.x;
@@ -322,22 +388,12 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                     const spacing = brushShape === 'rough' ? brushSize * 0.25 : brushSize * 0.1;
 
                     if (distance >= spacing) {
-                        const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
-                        terrainLayerRef.current.paint(pos.x, pos.y, brushSize, effectiveAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
-                        if (selectedTool === 'mask' && maskAction === 'subtract') {
-                            const backgroundBrushSize = brushSize * 2;
-                            terrainLayerRef.current.paint(pos.x, pos.y, backgroundBrushSize, subtractTexture, 'background', 1, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, false);
-                        }
+                        paintStrokeAt(pos, effectiveAsset);
                         lastPaintPos.current = pos;
                     }
                 } else {
                     // First paint (should have been handled by mousedown but just in case)
-                    const layerToPaint = selectedTool === 'mask' ? 'foreground' : selectedLayer;
-                    terrainLayerRef.current.paint(pos.x, pos.y, brushSize, effectiveAsset, layerToPaint, brushOpacity, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, selectedTool === 'mask', maskAction);
-                    if (selectedTool === 'mask' && maskAction === 'subtract') {
-                        const backgroundBrushSize = brushSize * 2;
-                        terrainLayerRef.current.paint(pos.x, pos.y, backgroundBrushSize, subtractTexture, 'background', 1, brushShape === 'rough' ? 0 : brushSoftness, undefined, brushShape, brushRoughness, brushSmooth, false);
-                    }
+                    paintStrokeAt(pos, effectiveAsset);
                     lastPaintPos.current = pos;
                 }
             }
@@ -463,9 +519,16 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
 
         if (isPainting.current) {
             isPainting.current = false;
-            if (terrainLayerRef.current) {
-                terrainLayerRef.current.setInteractive(false);
-                onUpdateTerrain(terrainLayerRef.current.getLayerData());
+            terrainLayerRef.current?.setInteractive(false);
+            topLayerRef.current?.setInteractive(false);
+            if (selectedTool === 'brush' || selectedTool === 'mask') {
+                const terrainData = terrainLayerRef.current?.getLayerData();
+                const topLayerData = topLayerRef.current?.getDataURL() ?? null;
+                onUpdateTerrain({
+                    background: terrainData?.background ?? null,
+                    foreground: terrainData?.foreground ?? null,
+                    top: topLayerData,
+                });
             }
             lastPaintPos.current = null;
         }
@@ -693,6 +756,14 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                         // node={items.find(i => i.id === selectedItemId) ? stageRef.current?.findOne(`#${selectedItemId}`) : undefined}
                         />
                     )}
+                </Layer>
+                <Layer ref={topLayerContainerRef}>
+                    <TopPaintLayer
+                        ref={topLayerRef}
+                        width={width}
+                        height={height}
+                        initialData={topData}
+                    />
                 </Layer>
                 <Layer ref={cursorLayerRef}>
                     {/* Cursor Layer */}

@@ -59,8 +59,8 @@ interface ToolOptionsPanelProps {
     setBrushRoughness: (roughness: number) => void;
     brushSmooth: boolean;
     setBrushSmooth: (smooth: boolean) => void;
-    selectedLayer?: 'background' | 'foreground';
-    setSelectedLayer?: (layer: 'background' | 'foreground') => void;
+    selectedLayer?: 'background' | 'foreground' | 'top';
+    setSelectedLayer?: (layer: 'background' | 'foreground' | 'top') => void;
     selectedGroup?: string[] | null;
     onSelectAsset?: (asset: string) => void;
     onClose: () => void;

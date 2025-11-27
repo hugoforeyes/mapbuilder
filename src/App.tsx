@@ -9,6 +9,7 @@ import type { MapElement, MapItem, MapText, ToolType, MaskSettings } from './typ
 type Snapshot = {
   backgroundData: string | null;
   foregroundData: string | null;
+  topData: string | null;
   items: MapElement[];
 };
 
@@ -19,6 +20,7 @@ function App() {
   const [selectedItemAsset, setSelectedItemAsset] = useState<string | null>(null);
   const [backgroundData, setBackgroundData] = useState<string | null>(null);
   const [foregroundData, setForegroundData] = useState<string | null>(null);
+  const [topData, setTopData] = useState<string | null>(null);
   const [items, setItems] = useState<MapElement[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [canvasSize] = useState({ width: 2048, height: 1536 });
@@ -43,7 +45,7 @@ function App() {
   const [brushRoughness, setBrushRoughness] = useState(8);
   const [brushSmooth, setBrushSmooth] = useState(true);
   const [itemOpacity, setItemOpacity] = useState(1);
-  const [selectedLayer, setSelectedLayer] = useState<'background' | 'foreground'>('foreground');
+  const [selectedLayer, setSelectedLayer] = useState<'background' | 'foreground' | 'top'>('foreground');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [selectedBrushGroup, setSelectedBrushGroup] = useState<string[] | null>(null);
   const [selectedItemGroup, setSelectedItemGroup] = useState<string[] | null>(null);
@@ -95,6 +97,7 @@ function App() {
   const takeSnapshot = (): Snapshot => ({
     backgroundData,
     foregroundData,
+    topData,
     items
   });
 
@@ -103,7 +106,13 @@ function App() {
     setUndoStack((prev) => {
       const snapshot = takeSnapshot();
       const last = prev[prev.length - 1];
-      if (last && last.backgroundData === snapshot.backgroundData && last.foregroundData === snapshot.foregroundData && JSON.stringify(last.items) === JSON.stringify(snapshot.items)) {
+      if (
+        last &&
+        last.backgroundData === snapshot.backgroundData &&
+        last.foregroundData === snapshot.foregroundData &&
+        last.topData === snapshot.topData &&
+        JSON.stringify(last.items) === JSON.stringify(snapshot.items)
+      ) {
         return prev;
       }
       return [...prev, snapshot];
@@ -115,6 +124,7 @@ function App() {
     isRestoringRef.current = true;
     setBackgroundData(snapshot.backgroundData);
     setForegroundData(snapshot.foregroundData);
+    setTopData(snapshot.topData);
     setItems(snapshot.items);
     setSelectedItemId(null);
     requestAnimationFrame(() => {
@@ -122,10 +132,11 @@ function App() {
     });
   };
 
-  const handleUpdateTerrain = (data: { background: string | null, foreground: string | null }) => {
+  const handleUpdateTerrain = (data: { background: string | null, foreground: string | null, top: string | null }) => {
     pushUndo();
     setBackgroundData(data.background);
     setForegroundData(data.foreground);
+    setTopData(data.top);
   };
 
   const handleAddItem = (item: MapElement) => {
@@ -231,6 +242,7 @@ function App() {
       pushUndo();
       setBackgroundData(null);
       setForegroundData(null);
+      setTopData(null);
       setItems([]);
     }
   };
@@ -239,6 +251,7 @@ function App() {
     const mapData = {
       backgroundData,
       foregroundData,
+      topData,
       items,
     };
     const blob = new Blob([JSON.stringify(mapData)], { type: 'application/json' });
@@ -271,6 +284,11 @@ function App() {
             }
             if (typeof parsed.foregroundData === 'string' || parsed.foregroundData === null) {
               setForegroundData(parsed.foregroundData || null);
+            }
+            if (typeof parsed.topData === 'string' || parsed.topData === null) {
+              setTopData(parsed.topData || null);
+            } else {
+              setTopData(null);
             }
             if (Array.isArray(parsed.items)) {
               setItems(parsed.items);
@@ -444,6 +462,7 @@ function App() {
               height={canvasSize.height}
               backgroundData={backgroundData}
               foregroundData={foregroundData}
+              topData={topData}
               items={items}
               selectedTool={selectedTool}
               selectedAsset={(selectedTool === 'brush' || selectedTool === 'mask') ? selectedBrushTexture : selectedItemAsset}
